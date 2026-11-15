@@ -4,6 +4,7 @@ import base64
 import io
 import importlib.util
 import json
+import os
 from pathlib import Path
 import unittest
 import urllib.error
@@ -52,6 +53,25 @@ class CardVerificationTests(unittest.TestCase):
         with self.assertRaises(card.CardCheckError) as error:
             card.encrypt_password(self.public, "fixture-secret" * 100)
         self.assertNotIn("fixture-secret", str(error.exception))
+
+    def test_codef_environment_picks_only_fixed_hosts(self):
+        """MOA_CODEF_ENV는 demo·production 두 고정 주소만 고르고, 다른 값은 요청 전에 멈춥니다."""
+        import codef_connection
+
+        for value, host in (
+            (None, "https://development.codef.io"),
+            ("demo", "https://development.codef.io"),
+            ("production", "https://api.codef.io"),
+        ):
+            environ = {} if value is None else {"MOA_CODEF_ENV": value}
+            with patch.dict(os.environ, environ, clear=False):
+                if value is None:
+                    os.environ.pop("MOA_CODEF_ENV", None)
+                self.assertEqual(codef_connection.api_host(), host)
+        for bad in ("https://evil.example", "prod", "sandbox"):
+            with patch.dict(os.environ, {"MOA_CODEF_ENV": bad}):
+                with self.assertRaises(ValueError):
+                    codef_connection.api_host()
 
     def test_samsung_uses_its_organization_without_card_pin(self):
         payload = card.approval_payload(
@@ -284,7 +304,7 @@ class CardVerificationTests(unittest.TestCase):
         with patch("codef_card.urllib.request.build_opener", return_value=opener) as build:
             self.assertEqual(card.post_approval("fixture-token", {"id": "fixture-id"})["data"], [])
         request = opener.open.call_args.args[0]
-        self.assertEqual(request.full_url, card.APPROVAL_URL)
+        self.assertEqual(request.full_url, "https://development.codef.io" + card.APPROVAL_PATH)
         self.assertEqual(request.get_header("Authorization"), "Bearer fixture-token")
         self.assertEqual(
             json.loads(urllib.parse.unquote(request.data.decode())), {"id": "fixture-id"}
@@ -296,7 +316,11 @@ class CardVerificationTests(unittest.TestCase):
     def test_http_and_invalid_response_never_expose_body_or_retry(self):
         opener = Mock()
         opener.open.side_effect = urllib.error.HTTPError(
-            card.APPROVAL_URL, 403, "fixture-private-message", {}, io.BytesIO(b"fixture-secret")
+            "https://development.codef.io" + card.APPROVAL_PATH,
+            403,
+            "fixture-private-message",
+            {},
+            io.BytesIO(b"fixture-secret"),
         )
         with patch("codef_card.urllib.request.build_opener", return_value=opener):
             with self.assertRaises(card.CardCheckError) as error:

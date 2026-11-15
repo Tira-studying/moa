@@ -1,4 +1,4 @@
-# 모아 — 개인 카드 내역 대시보드
+# 모아 — 가정용 카드·계좌 지출 관리
 
 신한·삼성·현대·KB국민·우리·롯데 카드의 명세서를 가져와 이용일 기준 월별 순사용액과 카드별 내역을 확인하는 개인용 웹앱입니다. 선택적으로 CODEF 개인 연결을 등록해 하루 4회 자동 수집과 검증한 지출 저장을 사용할 수 있습니다.
 
@@ -7,28 +7,69 @@
 > **공개 범위와 주의사항**
 >
 > - 한 가구(소유자 1명 + 공동관리자 1명)가 **자기 서버(NAS·Mac)에 직접 설치해 쓰는** 개인 가계부입니다. 여러 사람에게 제공하는 서비스용으로 만들지 않았습니다.
-> - 카드·계좌 자동 수집은 [CODEF](https://codef.io) API를 쓰며, 각자 CODEF 키를 발급받아 설정해야 합니다. 이 저장소는 CODEF 개발(데모) 환경 기준입니다.
+> - 카드·계좌 자동 수집은 [CODEF](https://codef.io) API를 쓰며, 각자 CODEF 키를 발급받아 설정해야 합니다. 기본은 CODEF 데모 환경입니다.
 > - 다른 사람의 금융 정보를 모아 주는 서비스로 운영하려면 관련 법(신용정보법 등)과 CODEF 정식 계약을 따로 확인해야 합니다.
 > - 카드사 화면·응답이 바뀌면 판독·수집이 멈출 수 있습니다. 실제 명세서·카드번호·비밀번호를 이슈나 PR에 올리지 마세요.
 
+## 이런 걸 할 수 있어요
+
+- **명세서 가져오기**: 6개 카드사(신한·삼성·현대·KB국민·우리·롯데)의 CSV·엑셀·보안 HTML·PDF 명세서를 읽어 거래로 저장합니다.
+- **자동 수집(선택)**: [CODEF](https://codef.io) 키가 있으면 휴대폰에서 카드·우리은행 계좌를 연결해 하루 4회 자동으로 가져옵니다. Gmail로 받은 명세서, 결제 문자도 받을 수 있습니다.
+- **분석**: 이용일 기준 월별 순사용액, 분야·카드사·가맹점·요일 분석, 할부·중복·고정 지출(구독) 후보, 분야별 예산·연말정산 카드 공제.
+- **두 사람이 함께**: 소유자와 공동관리자가 각자 거래를 관리하고, 합계와 (켜 둔 경우) 사용 내역을 함께 봅니다. 상대방 자료는 수정할 수 없습니다.
+- **휴대폰 앱처럼**: 홈 화면에 추가해 쓰는 PWA입니다. 영수증 사진 붙이기, 현금 직접 입력, 엑셀 내려받기를 지원합니다.
+
+<p>
+  <img src="docs/screenshots/desktop-dashboard.png" alt="PC 대시보드: 월 순사용액, 6개월 추이, 분야별 소비" width="640">
+  <img src="docs/screenshots/mobile-dashboard.png" alt="휴대폰 대시보드" width="180">
+  <img src="docs/screenshots/mobile-activity.png" alt="휴대폰 사용 내역" width="180">
+</p>
+
+화면의 가맹점·금액은 `manage.py demo`로 만든 가상 데이터입니다.
+
+## 빠른 시작 — 가상 데이터로 둘러보기
+
+실제 명세서 없이 3분이면 화면을 볼 수 있습니다. Python 3.12 이상이 필요합니다.
+
+```sh
+git clone https://github.com/Tira-studying/moa.git moa
+cd moa
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+CARD_DB=instance/demo.sqlite3 .venv/bin/python manage.py demo   # 가상 명세서 3개 저장
+CARD_DB=instance/demo.sqlite3 .venv/bin/python app.py
+```
+
+브라우저에서 `http://127.0.0.1:5000`을 열고, `manage.py demo`가 알려 준 데모 비밀번호로 로그인합니다. 가맹점·금액은 모두 지어낸 값입니다. 데모 DB(`instance/demo.sqlite3`)는 지워도 됩니다. `manage.py demo`는 거래가 이미 있는 DB에는 아무것도 넣지 않습니다.
+
+보안 HTML·PDF 명세서 읽기는 Node.js와 Chromium이 추가로 필요합니다(아래 [삼성·롯데카드 보안 HTML](#삼성롯데카드-보안-html-시험-기능)). CSV·엑셀은 위 설치만으로 됩니다.
+
+## 실제로 쓰기
+
+혼자 컴퓨터에서 쓰려면 위 명령에서 `manage.py demo` 대신 `manage.py`로 비밀번호를 정하고 `CARD_DB`를 빼면 됩니다(`instance/cards.sqlite3`에 저장). 이 개발 서버를 인터넷에 직접 노출하지 마세요.
+
+휴대폰에서 쓰려면 집의 서버에 Docker로 설치하고 [Tailscale](https://tailscale.com)의 HTTPS 주소로 접속합니다. 공유기 포트를 열지 않습니다.
+
+| 하고 싶은 일 | 안내 |
+|---|---|
+| NAS(x86-64)에 Docker로 설치 | [NAS 배포](deploy/NAS.md) |
+| Apple Silicon Mac에 설치·이전 | [Mac 안내](deploy/MAC.md) |
+| 공동관리자 추가와 접속 | [공동 관리](deploy/SHARING.md), [개인 관리·통합 공유](docs/PERSONAL_SHARING.md) |
+| 홈 화면 앱으로 설치 | [PWA](docs/PWA.md) |
+| 매일 DB 백업·복원 | [백업](deploy/BACKUP.md) |
+| 서버 상태 알림·재부팅 복구 | [모니터링](deploy/MONITORING.md) |
+| Gmail 명세서 자동 수집 | [Gmail](deploy/GMAIL.md) |
+| 카드 자동 수집(CODEF) | [CODEF 키 설정](deploy/CODEF.md) → [자동 수집](deploy/CODEF_AUTO.md) → [휴대폰에서 연결](deploy/PHONE_CONNECTIONS.md) |
+| 우리은행 입출금 | [우리은행](deploy/WOORI_BANK.md) |
+| 결제 문자로 임시 소비 확인 | [문자 수신](deploy/SMS.md) |
+
+CODEF는 기본이 데모 환경입니다. 정식 계약 뒤에는 `MOA_CODEF_ENV=production`으로 바꿉니다([CODEF 안내](deploy/CODEF.md#정식운영-환경으로-바꾸기)).
+
 ## 코드를 처음 읽는 분께
 
-[파트별 코드 안내서](docs/CODE_GUIDE.md)에서 파일별 역할, 화면→API→DB 흐름, 로그인·공동 관리와 명세서 판독을 설명합니다. 주요 코드에도 한국어 설명과 구역 제목을 붙였습니다. 서식 설정은 `pyproject.toml`과 `.prettierrc.json`에 있습니다.
+[파트별 코드 안내서](docs/CODE_GUIDE.md)에서 파일별 역할, 화면→API→DB 흐름, 로그인·공동 관리와 명세서 판독을 설명합니다. 주요 코드에도 한국어 설명과 구역 제목을 붙였습니다. 서식은 Python은 Black, 화면 코드는 Prettier를 씁니다(`pyproject.toml`, `.prettierrc.json`). 테스트는 `python -m unittest discover -s tests -q`로 실행하며, 화면까지 포함한 전체 검증 방법은 안내서의 검증 절에 있습니다.
 
-## 아이폰 접속과 NAS 배포
-
-로그인과 x86-64 NAS용 Docker/Tailscale 구성을 추가했습니다. [NAS 배포 안내](deploy/NAS.md)를 참고하세요. NAS 설치·HTTPS 주소 설정과 공동관리자 접속 절차를 안내합니다.
-
-## Mac으로 이전
-
-Apple Silicon용 Docker 추가 설정과 데이터·Tailscale 상태 이전 절차는 [Mac 이전 안내](deploy/MAC.md)에 있습니다. 실제 Mac에서 샌드박스 검증 후 전환합니다.
-
-Mac의 DB는 매일 04:30에 `~/moa-backups`로 자동 백업합니다. 설정·확인·복원은 [DB 자동 백업과 복원](deploy/BACKUP.md)을 참고하세요.
-push마다 실행되는 자동 테스트, 5분마다 서버 상태 확인과 휴대폰 알림, 재부팅 뒤 복구는 [자동 테스트·서버 상태 알림·재부팅 복구](deploy/MONITORING.md)를 참고하세요.
-
-## 홈 화면 앱으로 설치
-
-아이폰·아이패드·안드로이드에서 모아를 홈 화면에 추가해 앱처럼 열 수 있습니다. [PWA 설치 안내](docs/PWA.md)에 서버 업데이트와 기기별 설치 방법을 정리했습니다. 현재 구성에서는 Tailscale과 서버 연결이 계속 필요하며, 금융 내역은 오프라인 캐시에 저장하지 않습니다.
+# 자세한 기능 설명
 
 ## 화면 사용
 
@@ -69,19 +110,9 @@ push마다 실행되는 자동 테스트, 5분마다 서버 상태 확인과 휴
 
 가져오기에서 ‘실제·하위 가맹점’ 열을 선택하면 해당 정보를 원본 가맹점과 별도로 저장합니다. 명확한 실제/하위/세부 가맹점·판매자·판매처 열 이름이 있으면 선택 후보로 제안합니다. 원본 가맹점·금액·이용일과 중복 판정용 파일/표 해시는 변경하지 않습니다. 가맹점 순위에는 실제 가맹점을, 검색에는 원본/실제 가맹점과 메모를 반영합니다. 고정 지출은 실제 가맹점을 확인하지 못한 간편결제 이름만으로 판단하지 않습니다.
 
-## 시작하기
+## 로컬 실행 참고
 
-Python 3.12 기준:
-
-```sh
-cd /workspace/gpt
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python manage.py  # 최초 로그인 비밀번호 설정
-.venv/bin/python app.py
-```
-
-기본 주소는 로컬 `127.0.0.1:5000`입니다. 개인용 로그인 기능이 있습니다. 원격 접속 시 HTTPS와 MOA_PUBLIC_ORIGIN을 설정해야 하며 개발 서버 자체를 인터넷에 노출하지 마세요. 다른 포트는 `PORT=5001 .venv/bin/python app.py`로 지정합니다.
+위 [빠른 시작](#빠른-시작--가상-데이터로-둘러보기)을 참고하세요. 기본 주소는 `127.0.0.1:5000`이며 `PORT`로 바꿀 수 있습니다. 원격 접속에는 HTTPS와 `MOA_PUBLIC_ORIGIN`이 필요합니다.
 
 ## 내역서 가져오기
 

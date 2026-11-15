@@ -85,6 +85,7 @@ HTML의 `data-view="planning"` 같은 `data-` 속성은 화면 이동에 필요�
 | `static/shared-management.js`, `shared_management.py` | 허용된 관리 필드만 구성원별 읽기 공유 |
 | `static/shared-activity.js`, `shared_spending.py` | 사용 내역 ‘함께 보기’: `share_transactions`(기본 켜짐)인 구성원의 한 달 내역·메모를 읽기 전용으로(`/api/shared-transactions`, `shared_hidden` 거래·제외 거래는 뺌) |
 | `static/receipts.js`, `receipts.py` | 거래 영수증 사진: 거래 상세·직접 입력 창에서 사진을 붙이고·크게 보고·지웁니다. 화면이 긴 변 1600px JPEG로 줄여(EXIF 제거) 올리고, 서버는 JPEG·PNG·WebP 서명만 받아 DB(`transaction_receipts`)에 저장합니다. 주인만 올리고 지우며, 상대는 함께 보기에 보이는 거래의 사진만 `/api/shared-receipts/<id>`로 봅니다 |
+| `manage.py`, `demo_data.py` | 소유자 비밀번호 설정(`manage.py`)과 가상 데이터 채우기(`manage.py demo`). 데모는 가상 CSV 명세서 3개를 앱의 `/api/preview`→`/api/import` 흐름으로 저장하며, 거래·명세서가 있는 DB에는 넣지 않고 멈춥니다 |
 | `static/pwa.js`, `static/sw.js` | 홈 화면 설치·복귀 시 세션 확인·연결 실패 안내 |
 | `static/style.css` | 색상·배치·버튼·모바일 화면 규칙 |
 
@@ -440,7 +441,7 @@ sudo docker run --rm \
 
 ## 16. CODEF 개발자 인증 준비
 
-`codef_connection.py`는 개발자 키 설정과 토큰 발급을 담당합니다. 웹 인증 시험에서는 토큰을 반환하지 않으며, 별도 수동 조회 도구와 자동 수집 작업자는 메모리에서만 토큰을 사용합니다. 개인 연결·정기 수집은 `codef_sync.py`와 `codef_worker.py`에서 별도로 담당하며 [설정·검증 안내](../deploy/CODEF.md)를 참고합니다. `scripts/configure-codef.py`는 TTY에서 getpass로 데모 키를 받고 RSA 키를 검증한 후 비밀 파일을 600 권한으로 원자 교체합니다. 키를 인자로 받거나 화면에 출력하지 않습니다.
+CODEF 주소는 `codef_connection.api_host()`가 `MOA_CODEF_ENV`(`demo` 기본, `production`)로 두 고정 주소 중에서만 고릅니다. 임의 주소를 받지 않아 설정 실수로 키·토큰이 다른 서버로 가지 않습니다. `codef_connection.py`는 개발자 키 설정과 토큰 발급을 담당합니다. 웹 인증 시험에서는 토큰을 반환하지 않으며, 별도 수동 조회 도구와 자동 수집 작업자는 메모리에서만 토큰을 사용합니다. 개인 연결·정기 수집은 `codef_sync.py`와 `codef_worker.py`에서 별도로 담당하며 [설정·검증 안내](../deploy/CODEF.md)를 참고합니다. `scripts/configure-codef.py`는 TTY에서 getpass로 데모 키를 받고 RSA 키를 검증한 후 비밀 파일을 600 권한으로 원자 교체합니다. 키를 인자로 받거나 화면에 출력하지 않습니다.
 
 `GET /api/codef/status`는 소유자 세션과 공통 읽기 재검사를 통과한 뒤 설정 여부와 일반 결과만 반환합니다. `POST /api/codef/check`는 개발자 인증 확인으로서 소비 데이터 수정·개인 버전 대상이 아닙니다. 별도로 소유자 세션을 DB 잠금 안에서 재검사하고 1분 재요청 제한을 예약한 뒤 연결을 닫고 고정 HTTPS OAuth 서버에 요청합니다. 리다이렉트와 무제한 응답을 허용하지 않습니다. 결과 저장 전에 세션·요청 ID를 다시 검사하므로 계정 초기화나 늦은 응답을 반영하지 않습니다. 토큰·원본 응답·자격 증명은 DB·변경 이력·브라우저 저장소에 남기지 않고 고정 안내와 성공 여부만 저장합니다.
 

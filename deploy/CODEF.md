@@ -152,6 +152,16 @@ docker compose -f compose.nas.yml -f compose.mac.yml run --rm --no-deps \
   app python scripts/configure-codef.py
 ```
 
+## 정식(운영) 환경으로 바꾸기
+
+기본은 CODEF **데모** 환경(`development.codef.io`)입니다. CODEF와 정식 계약을 맺고 운영 키를 받았다면 `deploy/.env`에 다음을 적고 app·codef-worker를 다시 시작합니다.
+
+```sh
+MOA_CODEF_ENV=production
+```
+
+`demo`와 `production` 두 값만 받으며, 주소를 직접 입력할 수는 없습니다(키·토큰이 다른 서버로 가지 않도록). 2단계 키 입력에는 운영 키를 넣습니다. 데모와 운영의 연결 ID는 서로 쓸 수 없으므로 환경을 바꾼 뒤 각 구성원이 카드·계좌를 다시 연결해야 합니다.
+
 ## 보관·권한·오류
 
 서버 비밀 폴더의 `codef-app.json`에만 설정을 저장합니다. 폴더는 700, 파일은 600, 컨테이너 앱 사용자 UID/GID 1000 권한으로 준비합니다. 파일은 디스크에 평문으로 보관되므로 NAS 관리자/root는 읽을 수 있습니다. 앱에는 읽기 전용으로 마운트하고 Git·이미지 빌드·브라우저·로그에는 값을 넣지 않습니다. 기존 Gmail·명세서 암호 파일은 변경하지 않습니다.

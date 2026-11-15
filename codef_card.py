@@ -20,9 +20,9 @@ import urllib.request
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
-from codef_connection import DEMO_HOST, NoRedirect, validate_public_key
+from codef_connection import NoRedirect, api_host, validate_public_key
 
-APPROVAL_URL = DEMO_HOST + "/v1/kr/card/p/account/approval-list"
+APPROVAL_PATH = "/v1/kr/card/p/account/approval-list"
 BODY_LIMIT = 4 * 1024 * 1024
 MAX_CHALLENGES = 3
 CARD_OPTIONS = {
@@ -181,14 +181,14 @@ def post_codef(token, payload, operation="approval"):
     """URL 인코딩 JSON을 HTTPS로 전송합니다. 이동·재시도·원문 오류 출력은 하지 않습니다."""
     body = urllib.parse.quote(json.dumps(payload, ensure_ascii=False), safe="").encode("ascii")
     paths = {
-        "approval": "/v1/kr/card/p/account/approval-list",
+        "approval": APPROVAL_PATH,
         "register": "/v1/account/create",
         "bank_transactions": "/v1/kr/bank/p/account/transaction-list",
     }
     if operation not in paths:
         raise CardCheckError("허용되지 않은 CODEF 작업입니다.")
     request = urllib.request.Request(
-        DEMO_HOST + paths[operation],
+        api_host() + paths[operation],
         data=body,
         method="POST",
         headers={

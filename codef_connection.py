@@ -25,6 +25,25 @@ from flask import g, jsonify, request
 
 TOKEN_URL = "https://oauth.codef.io/oauth/token"
 DEMO_HOST = "https://development.codef.io"
+# 정식 계약을 맺은 설치는 MOA_CODEF_ENV=production으로 정식 주소를 씁니다.
+# 임의 주소를 받지 않고 두 고정 주소 중에서만 고르게 해, 설정 실수로 키·토큰이 다른 서버로 가지 않게 합니다.
+PRODUCTION_HOST = "https://api.codef.io"
+API_HOSTS = {"demo": DEMO_HOST, "production": PRODUCTION_HOST}
+
+
+def environment():
+    """MOA_CODEF_ENV(demo 기본·production)를 읽습니다. 그 밖의 값은 조용히 넘기지 않고 멈춥니다."""
+    name = os.environ.get("MOA_CODEF_ENV", "demo").strip() or "demo"
+    if name not in API_HOSTS:
+        raise ValueError("MOA_CODEF_ENV는 demo 또는 production이어야 합니다.")
+    return name
+
+
+def api_host():
+    """현재 설정의 CODEF API 주소입니다. 요청할 때마다 읽어 설정 변경을 바로 반영합니다."""
+    return API_HOSTS[environment()]
+
+
 CONFIG_LIMIT = 32768
 RESPONSE_LIMIT = 32768
 COOLDOWN = 60
@@ -202,8 +221,8 @@ def status(db, settings):
     row = db.execute("SELECT * FROM codef_app_check WHERE id=1").fetchone()
     result = dict(
         configured=True,
-        environment="demo",
-        api_host=DEMO_HOST,
+        environment=environment(),
+        api_host=api_host(),
         checked_at=None,
         ok=None,
         message="데모 키 설정을 읽었습니다. 개발자 인증 확인을 실행해 주세요.",

@@ -24,6 +24,8 @@ services:
       MOA_PUBLIC_ORIGIN: ${MOA_PUBLIC_ORIGIN:?먼저 .env에 발급받은 HTTPS 주소를 설정하세요}
       MOA_TRUST_PROXY: '1'
       MOA_CODEF_DAILY_REQUEST_LIMIT: ${MOA_CODEF_DAILY_REQUEST_LIMIT:-60}
+      # CODEF 환경: demo(기본) 또는 정식 계약 후 production. 바꾸면 카드·계좌를 다시 연결합니다.
+      MOA_CODEF_ENV: ${MOA_CODEF_ENV:-demo}
       CARD_DB: /data/cards.sqlite3
       MOA_GMAIL_USER: ${MOA_GMAIL_USER:-}
       MOA_GMAIL_FOLDER: ${MOA_GMAIL_FOLDER:-MOA}
@@ -88,6 +90,8 @@ services:
     environment:
       CARD_DB: /data/cards.sqlite3
       MOA_CODEF_DAILY_REQUEST_LIMIT: ${MOA_CODEF_DAILY_REQUEST_LIMIT:-60}
+      # CODEF 환경: demo(기본) 또는 정식 계약 후 production. 바꾸면 카드·계좌를 다시 연결합니다.
+      MOA_CODEF_ENV: ${MOA_CODEF_ENV:-demo}
     volumes:
       - card-data:/data
       - ./secrets:/run/moa-secrets:ro
