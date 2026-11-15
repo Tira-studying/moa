@@ -1,0 +1,32 @@
+/* PWA 설치 안내와 연결 끊김 표시입니다. 기본 화면 스타일 뒤에 불러옵니다. */
+body:not(.login-page) {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.pwa-network-status {
+  background: #fff3da;
+  color: #725315;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin: 12px 0;
+  line-height: 1.6;
+}
+.pwa-network-status[hidden],
+#pwa-install[hidden] {
+  display: none;
+}
+#pwa-install-status {
+  overflow-wrap: anywhere;
+}
+
+/* 다른 탭에서 계정을 바꾼 경우, 확인 전의 이전 개인 원장을 화면에 남기지 않습니다. */
+body.session-check-pending [data-view],
+body.session-check-pending dialog {
+  visibility: hidden;
+}
+
+.pwa-session-status {
+  display: none;
+}
+body.session-check-pending .pwa-session-status {
+  display: block;
+}

@@ -1,0 +1,14 @@
+.venv/
+instance/
+__pycache__/
+*.pyc
+.env
+node_modules/
+
+deploy/secrets/
+
+codef-app.json
+codef-storage.key
+.codef_state.json
+
+codef-card-auth/

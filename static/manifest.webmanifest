@@ -1,0 +1,27 @@
+{
+  "id": "/",
+  "name": "모아 · 카드 가계부",
+  "short_name": "모아",
+  "description": "카드 명세서와 소비 패턴을 함께 관리하는 나의 가계부",
+  "lang": "ko-KR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f7f9",
+  "theme_color": "#18786b",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/static/icons/moa-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/moa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

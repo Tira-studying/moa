@@ -1,0 +1,104 @@
+# 모아의 세 실행 단위: 접속용 Tailscale, 웹 앱, 선택적 Gmail 수집 프로세스입니다.
+name: moa
+services:
+  # 앱 전용 장치입니다. NAS 본체의 SSH용 Tailscale과 구분합니다.
+  tailscale:
+    image: tailscale/tailscale:stable
+    hostname: moa-card
+    environment:
+      TS_HOSTNAME: moa-card
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: 'true'
+      TS_AUTH_ONCE: 'true'
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+    restart: unless-stopped
+  # 화면·API 서버. Tailscale의 네트워크 안에서만 웹 서비스를 엽니다.
+  app:
+    build:
+      context: ..
+    network_mode: service:tailscale
+    depends_on:
+      - tailscale
+    environment:
+      MOA_PUBLIC_ORIGIN: ${MOA_PUBLIC_ORIGIN:?먼저 .env에 발급받은 HTTPS 주소를 설정하세요}
+      MOA_TRUST_PROXY: '1'
+      MOA_CODEF_DAILY_REQUEST_LIMIT: ${MOA_CODEF_DAILY_REQUEST_LIMIT:-60}
+      CARD_DB: /data/cards.sqlite3
+      MOA_GMAIL_USER: ${MOA_GMAIL_USER:-}
+      MOA_GMAIL_FOLDER: ${MOA_GMAIL_FOLDER:-MOA}
+      MOA_GMAIL_PASSWORD_FILE: /run/moa-secrets/gmail-app-password
+      MOA_STATEMENT_PASSWORD_FILE: /run/moa-secrets/statement-password
+      MOA_MAIL_SAMSUNG_ONLINE: ${MOA_MAIL_SAMSUNG_ONLINE:-0}
+    volumes:
+      - card-data:/data
+      - ./secrets:/run/moa-secrets:ro
+    tmpfs:
+      - /tmp:rw,size=512m,mode=1777
+    security_opt:
+      - seccomp=./playwright-seccomp.json
+    shm_size: 256m
+    read_only: true
+    pids_limit: 256
+    mem_limit: 2g
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          CMD,
+          python,
+          -c,
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5)",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+  # --profile mail일 때만 실행하며, 앱과 DB·비밀 파일을 함께 사용합니다.
+  mail-poller:
+    profiles: [mail]
+    build:
+      context: ..
+    command: [python, mail_worker.py]
+    environment:
+      CARD_DB: /data/cards.sqlite3
+      MOA_GMAIL_USER: ${MOA_GMAIL_USER:-}
+      MOA_GMAIL_FOLDER: ${MOA_GMAIL_FOLDER:-MOA}
+      MOA_GMAIL_PASSWORD_FILE: /run/moa-secrets/gmail-app-password
+      MOA_STATEMENT_PASSWORD_FILE: /run/moa-secrets/statement-password
+      MOA_MAIL_SAMSUNG_ONLINE: ${MOA_MAIL_SAMSUNG_ONLINE:-0}
+    volumes:
+      - card-data:/data
+      - ./secrets:/run/moa-secrets:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,size=512m,mode=1777
+    security_opt:
+      - seccomp=./playwright-seccomp.json
+    shm_size: 256m
+    mem_limit: 2g
+    pids_limit: 256
+    restart: unless-stopped
+
+  # CODEF 수집은 --profile codef를 명시한 경우에만 실행합니다. Gmail과 독립적입니다.
+  codef-worker:
+    profiles: [codef]
+    build:
+      context: ..
+    command: [python, codef_worker.py]
+    environment:
+      CARD_DB: /data/cards.sqlite3
+      MOA_CODEF_DAILY_REQUEST_LIMIT: ${MOA_CODEF_DAILY_REQUEST_LIMIT:-60}
+    volumes:
+      - card-data:/data
+      - ./secrets:/run/moa-secrets:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,size=128m,mode=1777
+    pids_limit: 64
+    mem_limit: 512m
+    restart: unless-stopped
+
+# 컨테이너를 바꿔도 보존해야 하는 장치 등록 상태와 가계부 DB입니다.
+volumes:
+  tailscale-state:
+  card-data:

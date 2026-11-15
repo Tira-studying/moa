@@ -1,0 +1,36 @@
+# Apple Silicon Mac용 추가 설정입니다. NAS 기본 파일과 함께 사용합니다.
+# 예: docker compose -f compose.nas.yml -f compose.mac.yml up -d tailscale app
+# 소스와 DB 형식은 같으며, NAS에서 만든 x86 이미지를 복사하지 않고 Mac에서 다시 빌드합니다.
+services:
+  tailscale:
+    platform: linux/arm64
+
+  app:
+    platform: linux/arm64
+    volumes:
+      # 같은 대상 경로의 NAS bind mount를 이 볼륨으로 대체합니다.
+      # Mac의 호스트 파일 소유권과 컨테이너 UID 1000의 차이를 피합니다.
+      - mac-secrets:/run/moa-secrets:ro
+
+  mail-poller:
+    platform: linux/arm64
+    volumes:
+      # 웹 앱과 같은 비밀 파일을 읽되 컨테이너에서 수정할 수는 없습니다.
+      - mac-secrets:/run/moa-secrets:ro
+
+  codef-worker:
+    platform: linux/arm64
+    volumes:
+      - mac-secrets:/run/moa-secrets:ro
+
+volumes:
+  # NAS 백업에서 미리 복원한 기존 볼륨만 사용합니다. 빈 볼륨을 자동 생성하지 않습니다.
+  card-data:
+    name: moa_card-data
+    external: true
+  tailscale-state:
+    name: moa_tailscale-state
+    external: true
+  mac-secrets:
+    name: moa_mac-secrets
+    external: true

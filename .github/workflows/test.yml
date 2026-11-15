@@ -1,0 +1,43 @@
+# 자동 테스트: main에 push하거나 PR을 열면 운영과 같은 Docker 이미지를 만들고 그 안에서 전체 테스트를 실행합니다.
+#
+# 이미지 안에서 실행하는 이유
+# - Dockerfile·.dockerignore가 복사할 파일을 이름으로 지정하므로, 새 파일을 빠뜨리면 여기서 바로 실패합니다.
+# - 이미지에 Chromium이 있어 화면 테스트(MOA_BROWSER_TESTS=1)까지 건너뛰지 않고 실행합니다.
+# 실제 DB·비밀 파일은 사용하지 않습니다. 테스트는 임시 DB와 가상 자료만 씁니다.
+name: 테스트
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# 같은 브랜치에 연달아 push하면 이전 실행을 취소하고 최신 것만 검사합니다.
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: 이미지 빌드와 전체 테스트
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 운영과 같은 Docker 이미지 빌드
+        env:
+          DOCKER_BUILDKIT: '1'
+        run: docker build -t moa-ci .
+
+      - name: 이미지 안에서 전체 테스트 (화면 테스트 포함)
+        run: |
+          docker run --rm --entrypoint sh \
+            -e MOA_BROWSER_TESTS=1 \
+            -e CARD_DB=/tmp/test.sqlite3 \
+            --security-opt seccomp=deploy/playwright-seccomp.json \
+            --shm-size 256m \
+            moa-ci -c 'python -m unittest discover -s tests -v'

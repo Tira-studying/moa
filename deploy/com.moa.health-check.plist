@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  모아 서버 상태 확인 (macOS launchd 사용자 작업)
+  5분마다, 그리고 로그인 직후 한 번 실행합니다. 로그인 직후 실행이 재부팅 뒤 Docker Desktop을 켜는 역할을 합니다.
+  설치·해제 방법은 deploy/MONITORING.md를 참고하세요.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.moa.health-check</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/YOUR-USER/moa-projects/moa/scripts/health-check.sh</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartInterval</key>
+  <integer>300</integer>
+  <key>StandardOutPath</key>
+  <string>/Users/YOUR-USER/.local/state/moa-health/launchd.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/YOUR-USER/.local/state/moa-health/launchd.log</string>
+</dict>
+</plist>

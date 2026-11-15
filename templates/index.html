@@ -1,0 +1,1854 @@
+<!doctype html>
+<html lang="ko">
+  <!-- script의 defer는 HTML을 읽은 뒤 실행한다는 뜻입니다. 공통 도구가 먼저 오도록 순서를 유지합니다. -->
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#18786b" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="모아" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="manifest" href="/static/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/moa-192.png" />
+    <title>모아 · 나의 카드 생활</title>
+    <link rel="stylesheet" href="/static/style.css" />
+    <link rel="stylesheet" href="/static/pwa.css" />
+    <script src="/static/analytics.js" defer></script>
+    <script src="/static/dashboard.js" defer></script>
+    <script src="/static/app.js" defer></script>
+    <script src="/static/transactions.js" defer></script>
+    <script src="/static/calendar.js" defer></script>
+    <script src="/static/receipts.js" defer></script>
+    <script src="/static/manual-entry.js" defer></script>
+    <script src="/static/export.js" defer></script>
+    <script src="/static/imports.js" defer></script>
+    <script src="/static/mail.js" defer></script>
+    <script src="/static/categories.js" defer></script>
+    <script src="/static/finance.js" defer></script>
+    <script src="/static/billing.js" defer></script>
+    <script src="/static/card-performance.js" defer></script>
+    <script src="/static/planning-tools.js" defer></script>
+    <script src="/static/sharing.js" defer></script>
+    <script src="/static/household.js" defer></script>
+    <script src="/static/shared-management.js" defer></script>
+    <script src="/static/shared-activity.js" defer></script>
+    <script src="/static/sms.js" defer></script>
+    <script src="/static/codef.js" defer></script>
+    <script src="/static/codef-sync.js" defer></script>
+    <script src="/static/bank.js" defer></script>
+    <script src="/static/connection-setup.js" defer></script>
+    <script src="/static/pwa.js" defer></script>
+  </head>
+  <body data-user-id="{{ user_id }}">
+    <!-- 데스크톱 메뉴: href의 #값은 app.js의 화면 이동과 연결됩니다. -->
+    <aside>
+      <a class="brand" href="/">모아<span>moa</span></a>
+      <div class="workspace">PERSONAL WORKSPACE</div>
+      <a class="nav active" href="#dashboard">◫ <span>카드 대시보드</span></a
+      ><a class="nav" href="#activity">▤ <span>사용 내역</span></a
+      ><a class="nav" href="#mail-inbox">✉ <span>이메일 명세서</span></a
+      ><a class="nav" href="#upload">↥ <span>파일 추가</span></a
+      ><a class="nav" href="#planning">▦ <span>지출 관리</span></a
+      ><a class="nav" href="#sms" hidden>☏ <span>실시간 소비</span></a
+      ><a class="nav" href="#history">▤ <span>저장 기록</span></a
+      ><a class="nav" href="#sharing">⚙ <span>계정 · 설정</span></a>
+      <div class="aside-bottom">
+        <span class="avatar">나</span>
+        <div>나의 카드 생활<small>개인용 · 로컬 저장</small></div>
+      </div>
+    </aside>
+    <!-- 화면의 본문: header는 현재 위치와 계정 메뉴를 표시합니다. -->
+    <main id="app-main">
+      <header>
+        <a class="mobile-page-brand" href="#dashboard">모아</a>
+        <div class="breadcrumb">내 지갑 <span>/</span> <span id="page-title">대시보드</span></div>
+        <div>
+          <span class="private" id="account-role">● 개인 계정</span
+          ><a class="button" href="#sharing">계정</a
+          ><button class="logout-button" id="logout-button">로그아웃</button>
+        </div>
+      </header>
+      <div class="pwa-network-status" id="pwa-network-status" role="status" hidden>
+        연결을 확인해 주세요. 인터넷과 Tailscale, 서버 실행 상태를 확인한 뒤 다시 시도하세요.
+        <button class="button" id="pwa-reconnect" type="button">다시 확인</button>
+      </div>
+      <p class="help pwa-session-status" role="status">
+        개인 화면을 열기 전에 로그인 상태를 확인하고 있습니다.
+      </p>
+      <!-- 다른 화면이 먼저 저장했을 때 표시하는 안내입니다. 자동으로 덮어쓰지 않습니다. -->
+      <div class="notice" id="conflict-notice" hidden>
+        <p>
+          다른 화면에서 변경한 내용이 있어 저장을 중단했습니다. 입력 내용을 따로 확인한 뒤 최신
+          화면을 다시 열어 주세요. 다시 열면 저장하지 않은 입력은 초기화됩니다.
+        </p>
+        <button class="button" type="button" id="reload-shared">최신 화면 다시 열기</button>
+      </div>
+      <!-- 대시보드: 저장된 거래를 분석합니다. 실제 카드 청구액과 구분합니다. -->
+      <div id="dashboard" data-view="dashboard">
+        <div class="dashboard-toolbar">
+          <a class="dashboard-mobile-brand" href="#dashboard">모아</a>
+          <h1 id="dashboard-title">이번 달 지출</h1>
+          <div class="dashboard-scope-row">
+            <div class="dashboard-scope" aria-label="지출 공유 범위">
+              <button
+                class="button active"
+                type="button"
+                data-dashboard-scope="personal"
+                aria-pressed="true"
+              >
+                내 지출
+              </button>
+              <button
+                class="button"
+                type="button"
+                data-dashboard-scope="household"
+                aria-pressed="false"
+              >
+                통합 지출
+              </button>
+            </div>
+            <button class="button dashboard-cash" type="button" data-manual-open>
+              ＋ 현금 지출<span class="dashboard-cash-long">&nbsp;적기</span>
+            </button>
+          </div>
+          <div class="month-picker">
+            <button id="prev" aria-label="이전 달">‹</button
+            ><input id="month" type="month" aria-label="조회 월" /><button
+              id="next"
+              aria-label="다음 달"
+            >
+              ›
+            </button>
+          </div>
+          <a class="button primary dashboard-import" href="#upload">＋ 내역서 가져오기</a>
+          <a class="dashboard-settings" href="#sharing" aria-label="계정과 설정">⚙</a>
+        </div>
+        <div id="personal-dashboard" class="dashboard-personal">
+          <div id="demo-banner" class="notice hidden">
+            예시 데이터입니다. 실제 사용 내역이 아닙니다.
+          </div>
+          <section id="dashboard-alerts" class="dashboard-alerts" aria-label="확인할 일" hidden>
+            <button class="dashboard-alert" type="button" id="open-category-review" hidden>
+              <span aria-hidden="true">!</span><span id="category-review-summary"></span
+              ><strong>분류 확인 ›</strong>
+            </button>
+            <button class="dashboard-alert" type="button" id="open-bank-review" hidden>
+              <span aria-hidden="true">!</span><span id="bank-dashboard-summary"></span
+              ><strong>중복 확인 ›</strong>
+            </button>
+            <button class="dashboard-alert" type="button" id="open-budget-alert" hidden>
+              <span aria-hidden="true">!</span><span id="budget-alert-summary"></span
+              ><strong>예산 보기 ›</strong>
+            </button>
+          </section>
+          <div class="dashboard-hero-grid">
+            <section class="panel spending-card" aria-label="월 순사용액과 전월 비교">
+              <div class="stat-label">월 순사용액 <span id="spending-period"></span></div>
+              <div class="stat-value" id="total">0<span>원</span></div>
+              <p id="comparison" class="comparison-badge"></p>
+              <div id="comparison-chart" class="comparison-chart"></div>
+              <div id="comparison-legend" class="comparison-legend"></div>
+            </section>
+            <section class="dashboard-metrics" aria-label="이번 달 지표">
+              <article class="stat">
+                <div class="stat-label">사용 카드</div>
+                <div class="stat-value" id="card-count">0<span>개</span></div>
+              </article>
+              <article class="stat">
+                <div class="stat-label">이용 건수</div>
+                <div class="stat-value" id="tx-count">0<span>건</span></div>
+              </article>
+              <article class="stat">
+                <div class="stat-label">건당 평균</div>
+                <strong id="pattern-average">0원</strong>
+              </article>
+              <article class="stat">
+                <div class="stat-label">결제한 날</div>
+                <strong id="pattern-days">0일</strong>
+              </article>
+              <article class="stat">
+                <div class="stat-label">주말 비중</div>
+                <strong id="pattern-weekend">0%</strong>
+              </article>
+              <button class="stat stat-link" type="button" id="dashboard-bill-open">
+                <div class="stat-label">입력 청구액 ›</div>
+                <strong id="dashboard-bill-total">미입력</strong>
+              </button>
+            </section>
+          </div>
+          <div class="dashboard-analysis">
+            <section class="panel dashboard-trend-panel">
+              <div class="section-title"><h2>최근 6개월 추이</h2></div>
+              <div id="pattern-trend" class="trend-columns"></div>
+            </section>
+            <section class="panel" id="pattern-breakdown">
+              <div class="section-title">
+                <h2 id="pattern-title">분야별 소비</h2>
+                <div class="planning-tabs">
+                  <button class="button" type="button" id="manage-categories">분야 관리</button
+                  ><button class="button" type="button" id="review-categories">분류 수정</button>
+                </div>
+              </div>
+              <div class="pattern-tabs" aria-label="소비 패턴 종류">
+                <button
+                  type="button"
+                  class="button active"
+                  data-pattern-tab="categories"
+                  aria-pressed="true"
+                >
+                  분야</button
+                ><button type="button" class="button" data-pattern-tab="cards" aria-pressed="false">
+                  카드·계좌</button
+                ><button
+                  type="button"
+                  class="button"
+                  data-pattern-tab="merchants"
+                  aria-pressed="false"
+                >
+                  가맹점</button
+                ><button
+                  type="button"
+                  class="button"
+                  data-pattern-tab="weekdays"
+                  aria-pressed="false"
+                >
+                  요일
+                </button>
+              </div>
+              <div id="pattern-distribution" class="pattern-bars"></div>
+            </section>
+          </div>
+          <!-- 예산·연말정산·정기 결제 요약: static/planning-tools.js가 켜진 기능만 채웁니다. -->
+          <div class="dashboard-tools">
+            <section class="panel" id="dashboard-budget" aria-label="이번 달 예산" hidden>
+              <div class="section-title">
+                <h2>이번 달 예산</h2>
+                <button class="button" type="button" data-open-tab="budgets">관리 ›</button>
+              </div>
+              <div id="dashboard-budget-list"></div>
+            </section>
+            <section class="panel" id="dashboard-tax" aria-label="연말정산 카드 공제" hidden>
+              <div class="section-title">
+                <h2>연말정산 카드 공제</h2>
+                <button class="button" type="button" data-open-tab="tax">자세히 ›</button>
+              </div>
+              <div id="dashboard-tax-body"></div>
+            </section>
+            <section class="panel" id="dashboard-subscriptions" aria-label="정기 결제" hidden>
+              <div class="section-title">
+                <h2>정기 결제</h2>
+                <button class="button" type="button" data-open-tab="recurring">전체 ›</button>
+              </div>
+              <div id="dashboard-subscriptions-body"></div>
+            </section>
+          </div>
+          <section
+            class="panel dashboard-card-performance"
+            id="dashboard-card-performance"
+            aria-label="카드 전월 실적"
+            hidden
+          >
+            <div class="section-title">
+              <h2>카드 실적</h2>
+              <button class="button" type="button" id="card-performance-open">관리 ›</button>
+            </div>
+            <div id="dashboard-card-performance-list"></div>
+          </section>
+          <section class="panel dashboard-recent">
+            <div class="section-title">
+              <h2>최근 사용 내역</h2>
+              <button class="button" type="button" id="recent-all">전체 보기 ›</button>
+            </div>
+            <div id="recent-transactions"></div>
+          </section>
+          <details class="dashboard-info">
+            <summary>ⓘ 집계 기준 안내</summary>
+            <p class="help">
+              등록된 이용일 기준의 개인 내역입니다. 미등록 내역은 포함되지 않으며 실제 카드 청구액과
+              다를 수 있습니다. 순사용액·누적·추이는 취소·환불을 차감하고, 평균·분야·가맹점·요일
+              비중은 양수 사용액 기준입니다. 카드·계좌 탭은 결제 수단별 순사용액을 표시합니다. 계좌
+              출금은 실제 지출로 확인해 반영한 건만 포함합니다.
+            </p>
+            <p class="help">
+              진행 중인 달은 한국시간 오늘까지 전월 같은 날짜 구간과 비교합니다. 지난달 누적 점선은
+              월 전체를 보여주며, 명세서가 빠진 경우 비교도 불완전할 수 있습니다. 미등록은 저장
+              내역이 없다는 뜻으로 지출 0원과 구분합니다.
+            </p>
+            <p id="refunds" class="help"></p>
+            <p id="pattern-caption" class="help"></p>
+            <p id="category-status" class="help"></p>
+            <label class="demo-toggle"><input id="demo" type="checkbox" /> 가상 예시 보기</label>
+          </details>
+          <!-- 기존 문자 기능은 #sms로 직접 열 수 있으며 대시보드 조회·노출은 숨깁니다. -->
+          <section id="sms-dashboard" hidden><p id="sms-dashboard-summary"></p></section>
+        </div>
+        <section id="household-dashboard" hidden>
+          <div class="section-title">
+            <h2>통합 지출</h2>
+            <button class="button" id="household-refresh" type="button">새로고침</button>
+          </div>
+          <input id="household-month" type="month" hidden />
+          <p class="help">
+            활성 구성원의 이용일 기준 지출을 합산합니다. 이 통합 화면에는 일반 거래나 메모를
+            표시하지 않습니다. 청구·납부 정보는 지출 관리의 함께 열람에서 확인하세요. 명세서
+            미등록분은 합계에 포함되지 않습니다.
+          </p>
+          <p class="help" id="household-state" role="status"></p>
+          <div class="pattern-highlights" id="household-stats"></div>
+          <div class="pattern-grid">
+            <section class="panel">
+              <h3>분야별 합계</h3>
+              <div id="household-categories"></div>
+            </section>
+            <section class="panel">
+              <h3>결제 수단별 합계</h3>
+              <div id="household-cards"></div>
+            </section>
+          </div>
+          <p class="help">
+            분야·결제 수단 합계는 취소·환불을 제외한 양수 사용액 기준입니다. 위의 순사용액은
+            취소·환불을 차감합니다.
+          </p>
+          <section class="panel">
+            <h3>최근 6개월 통합 순사용액</h3>
+            <div id="household-trend"></div>
+          </section>
+        </section>
+      </div>
+      <!-- 사용 내역: 전체 거래를 기간·카드·분야·가맹점으로 찾습니다. -->
+      <section class="panel transactions" id="activity" data-view="activity" hidden>
+        <div class="section-title">
+          <div>
+            <h2>사용 내역</h2>
+            <p>내가 저장한 전체 기간의 거래입니다. 기간·카드사·가맹점으로 찾아보세요.</p>
+          </div>
+          <div class="activity-title-actions">
+            <button class="button primary" type="button" data-manual-open>+ 직접 입력</button
+            ><span id="result-count" class="pill">0건</span>
+          </div>
+        </div>
+        <div class="activity-switches">
+          <div class="pattern-tabs activity-scope" role="group" aria-label="누구의 사용 내역">
+            <button type="button" class="button active" data-activity-scope="mine" aria-pressed="true">
+              내 내역</button
+            ><button type="button" class="button" data-activity-scope="shared" aria-pressed="false">
+              함께 보기
+            </button>
+          </div>
+          <div class="pattern-tabs activity-mode" role="group" aria-label="사용 내역 보기 방식">
+            <button type="button" class="button active" data-activity-mode="list" aria-pressed="true">
+              목록</button
+            ><button type="button" class="button" data-activity-mode="calendar" aria-pressed="false">
+              달력
+            </button>
+          </div>
+        </div>
+        <!-- 함께 보기(shared-activity.js): 공개를 켠 구성원의 한 달 내역을 읽기 전용으로 봅니다. -->
+        <section id="activity-shared" aria-label="함께 보는 사용 내역" hidden>
+          <div class="shared-activity-head">
+            <div class="month-picker">
+              <button type="button" id="shared-activity-prev" aria-label="이전 달">‹</button
+              ><input id="shared-activity-month" type="month" aria-label="조회 월" /><button
+                type="button"
+                id="shared-activity-next"
+                aria-label="다음 달"
+              >
+                ›
+              </button>
+            </div>
+            <p class="help" id="shared-activity-sharing"></p>
+          </div>
+          <p class="help" id="shared-activity-state" role="status"></p>
+          <div id="shared-activity-list"></div>
+        </section>
+        <div class="activity-period">
+          <label
+            >조회 기간<select id="tx-period">
+              <option value="all">전체 기간</option>
+              <option value="month">월별</option>
+              <option value="custom">직접 지정</option>
+            </select></label
+          ><label id="tx-month-label" hidden>조회 월<input id="tx-month" type="month" /></label>
+          <div id="tx-range" hidden>
+            <label>시작일<input id="tx-start" type="date" /></label
+            ><label>종료일<input id="tx-end" type="date" /></label>
+          </div>
+        </div>
+        <p id="tx-period-error" class="help" role="status"></p>
+        <div class="activity-search-row">
+          <input type="search" id="search" placeholder="가맹점 검색" aria-label="가맹점 검색" />
+          <button
+            class="button"
+            id="activity-filter-toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="activity-filters"
+          >
+            필터 <span id="activity-filter-count" hidden></span>
+          </button>
+        </div>
+        <div class="filters" id="activity-filters">
+          <select id="tx-visibility" aria-label="집계 포함 여부">
+            <option value="active">집계 대상</option>
+            <option value="excluded">제외한 내역</option>
+            <option value="all">전체 기록</option></select
+          ><select id="filter-category" aria-label="소비 분야 필터">
+            <option value="">전체 분야</option></select
+          ><select id="filter-card" aria-label="카드·계좌 필터">
+            <option value="">전체 카드·계좌</option>
+            <option>신한</option>
+            <option>삼성</option>
+            <option>현대</option>
+            <option>KB국민</option>
+            <option>우리</option>
+            <option>롯데</option>
+          </select>
+          <button
+            class="button"
+            id="activity-filters-reset"
+            type="button"
+            title="카드·분야·집계 필터를 초기화합니다"
+          >
+            필터 초기화
+          </button>
+          <details class="activity-help">
+            <summary>분류 안내</summary>
+            <p class="help">
+              일반 가맹점은 공통 분류를 기억하고, 네이버페이·카카오페이·토스페이·페이코 등
+              간편결제는 이번 거래만 수정합니다. ‘상세·분류’에서 실제 가맹점·메모와 적용 범위를
+              지정할 수 있습니다. 정보가 부족하면 미분류로 남깁니다.
+            </p>
+          </details>
+        </div>
+        <div class="category-review-toolbar">
+          <label><input id="tx-review-only" type="checkbox" /> 분야 확인 필요만</label
+          ><button class="button" type="button" id="confirm-category-reviews" disabled hidden>
+            표시된 내역 확인 완료
+          </button>
+        </div>
+        <!-- 달력: 위의 검색·카드·분야 필터를 그대로 적용해 날짜별 순사용액을 보여 줍니다. 날짜를 누르면 아래 목록이 그날로 좁혀집니다. -->
+        <section id="spending-calendar" class="spending-calendar" aria-label="날짜별 사용 금액" hidden>
+          <div class="calendar-head">
+            <button class="button" type="button" id="calendar-prev" aria-label="이전 달">‹</button>
+            <h3 id="calendar-title"></h3>
+            <button class="button" type="button" id="calendar-next" aria-label="다음 달">›</button>
+          </div>
+          <p id="calendar-summary" class="calendar-summary"></p>
+          <div class="calendar-weekdays" aria-hidden="true">
+            <span class="sun">일</span><span>월</span><span>화</span><span>수</span><span>목</span
+            ><span>금</span><span class="sat">토</span>
+          </div>
+          <div id="calendar-days" class="calendar-days"></div>
+          <div class="calendar-foot">
+            <span class="calendar-legend"
+              ><i class="level-1"></i><i class="level-2"></i><i class="level-3"></i
+              ><i class="level-4"></i> 진할수록 많이 쓴 날 · <b>무지출</b>: 쓴 기록이 없는 날</span
+            >
+            <button class="button" type="button" id="calendar-clear-day" hidden>한 달 전체 보기</button>
+          </div>
+        </section>
+        <div class="export-row">
+          <p id="tx-summary" class="help" aria-live="polite"></p>
+          <!-- 엑셀 내보내기(export.js): 지금 보이는 조건 그대로 xlsx를 받거나, 휴대폰 공유로 메일·메신저에 첨부합니다. -->
+          <div class="export-actions">
+            <button class="button" type="button" id="export-download">엑셀 내려받기</button
+            ><button class="button" type="button" id="export-share" hidden>공유·메일</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table role="table" aria-label="개인 사용 내역">
+            <thead role="rowgroup">
+              <tr role="row">
+                <th role="columnheader" scope="col">이용일</th>
+                <th role="columnheader" scope="col">가맹점</th>
+                <th role="columnheader" scope="col">분야</th>
+                <th role="columnheader" scope="col">카드·계좌</th>
+                <th role="columnheader" scope="col" class="right">이용금액</th>
+              </tr>
+            </thead>
+            <tbody id="transactions" role="rowgroup"></tbody>
+          </table>
+        </div>
+        <div id="empty" class="empty">
+          <div>▤</div>
+          <h3>첫 번째 내역서를 가져와 보세요</h3>
+          <p>카드사에서 받은 CSV 또는 엑셀 파일로 시작할 수 있어요.</p>
+          <a href="/sample.csv">샘플 CSV 다운로드 ↓</a>
+        </div>
+        <button id="more" class="button hidden">내역 더 보기</button>
+      </section>
+      <!-- 이메일: Gmail 첨부 수집 상태와 검토 대상을 표시합니다. -->
+      <section class="panel" id="mail-inbox" data-view="mail-inbox" hidden>
+        <div class="section-title">
+          <h2>이메일로 받은 명세서</h2>
+          <button class="button" id="mail-refresh" type="button">목록 새로고침</button>
+        </div>
+        <p class="help" id="mail-state" role="status" aria-live="polite">
+          Gmail 연결 상태를 확인하고 있습니다.
+        </p>
+        <details class="guidance">
+          <summary>검토 설정 · 사용 안내</summary>
+          <p class="help">
+            카드사 표시는 추정값입니다. 카드사를 확인한 뒤 검토를 시작하세요. 원본 첨부파일은
+            Gmail에 두고, 선택할 때 메모리로 불러옵니다. 거래 저장은 기존 미리보기에서 확인 후
+            진행합니다.
+          </p>
+          <label for="mail-year">검토할 이용 연도 (두 자리 날짜일 때)</label
+          ><input
+            id="mail-year"
+            type="number"
+            min="1900"
+            max="2100"
+            placeholder="예: 2026"
+            inputmode="numeric"
+          />
+          <p class="help">
+            일괄검토는 첨부파일을 순서대로 열어 거래 후보를 읽을 수 있는지 확인합니다. 보안 명세서는
+            저장된 공통 비밀번호를 사용하며, 거래 저장은 각 명세서의 검토 화면에서 진행합니다.
+          </p>
+        </details>
+        <h3>명세서 처리 현황</h3>
+        <div id="mail-summary" class="mail-summary" aria-live="polite"></div>
+        <label for="mail-filter">처리 상태</label
+        ><select id="mail-filter">
+          <option value="pending">미저장 명세서</option>
+          <option value="">전체</option>
+          <option value="received">수신됨</option>
+          <option value="needs_review">검토 필요</option>
+          <option value="ready">열기 성공</option>
+          <option value="saved">저장됨</option>
+        </select>
+        <p class="help" id="mail-list-note"></p>
+        <div class="mail-bulk-toolbar">
+          <label><input type="checkbox" id="mail-select-all" /> 현재 목록 모두 선택</label
+          ><button class="button" type="button" id="mail-bulk" disabled>
+            선택한 명세서 일괄검토 (0)</button
+          ><button class="button hidden" type="button" id="mail-bulk-stop">중단</button>
+        </div>
+        <p class="help" id="mail-bulk-progress" role="status"></p>
+        <ul id="mail-bulk-results"></ul>
+        <div id="mail-items" aria-live="polite"></div>
+        <button class="button hidden" id="mail-more" type="button">명세서 더 보기</button>
+      </section>
+      <!-- 파일 추가: CSV·XLSX와 보안 HTML·PDF의 입력 경로입니다. -->
+      <section class="panel" id="upload" data-view="upload" hidden>
+        <div class="section-title">
+          <div>
+            <h2>내역서 가져오기</h2>
+            <p>먼저 카드사를 고른 뒤 파일을 올려주세요.</p>
+          </div>
+          <span class="pill">CSV · XLSX</span>
+        </div>
+        <p class="manual-entry-hint">
+          현금·계좌이체·지역화폐·온누리상품권처럼 명세서가 없는 지출은
+          <button class="button" type="button" data-manual-open>직접 입력</button>으로 적을 수 있어요.
+        </p>
+        <div class="upload-tabs" aria-label="파일 종류">
+          <button
+            class="button active"
+            type="button"
+            data-upload-mode="spreadsheet"
+            aria-pressed="true"
+          >
+            CSV · 엑셀</button
+          ><button class="button" type="button" data-upload-mode="secure" aria-pressed="false">
+            보안 HTML · PDF
+          </button>
+        </div>
+        <div id="spreadsheet-upload" data-upload-panel="spreadsheet">
+          <div class="notice">
+            개인정보 보호를 위해 카드번호·주민번호 등 불필요한 열은 삭제해 주세요. 선택한 거래 열과
+            직접 입력한 분류·실제 가맹점·메모를 저장합니다. 파일명에도 개인정보를 넣지 마세요.
+          </div>
+          <form id="upload-form">
+            <div class="form-grid">
+              <label
+                >카드사<select id="upload-card" required>
+                  <option value="">선택해 주세요</option>
+                  <option>신한</option>
+                  <option>삼성</option>
+                  <option>현대</option>
+                  <option>KB국민</option>
+                  <option>우리</option>
+                  <option>롯데</option>
+                </select></label
+              ><label
+                >열 제목이 있는 행<input
+                  id="header-row"
+                  type="number"
+                  min="1"
+                  value="1"
+                  required
+                  disabled
+              /></label>
+            </div>
+            <label id="auto-header-label"
+              ><input id="auto-header" type="checkbox" checked /> 제목 행 자동 찾기</label
+            ><label for="upload-year">두 자리·연도 없는 날짜에 적용할 연도 (선택)</label
+            ><input
+              id="upload-year"
+              type="number"
+              min="1900"
+              max="2100"
+              inputmode="numeric"
+              placeholder="예: 2026"
+            />
+            <p class="help">
+              26.10.08처럼 연도가 두 자리인 날짜는 실제 이용 연도를 입력하세요. 세기는 자동으로
+              추측하지 않습니다.
+            </p>
+            <label class="file-zone"
+              ><span class="upload-icon">↥</span><strong>내역서 파일 선택</strong
+              ><span>CSV 또는 XLSX · 최대 8MB · 엑셀 첫 번째 시트</span
+              ><input type="file" id="file" accept=".csv,.xlsx" required
+            /></label>
+            <p class="help">
+              암호가 걸린 엑셀은 암호를 해제해 주세요. 신한 PDF는 아래 보안 명세서 열기를
+              이용하세요. 구형 XLS는 지원하지 않습니다. 마지막의 명확한 합계 행은 미리보기에서
+              제외합니다. 그 외 안내 행은 삭제하고, 취소·환불 금액은 음수로 표시해 주세요.
+            </p>
+            <button class="button primary" id="preview-button">파일 미리보기</button>
+          </form>
+        </div>
+        <section class="secure-section" id="secure-upload" data-upload-panel="secure" hidden>
+          <h3>카드 보안 명세서 열기 <span class="pill">시험 기능</span></h3>
+          <p class="help">
+            삼성·롯데·현대·우리 HTML 또는 신한 PDF를 그대로 선택하세요. 신한 PDF에 암호가 없으면
+            비밀번호를 비워둘 수 있습니다. 비밀번호는 이번 처리에만 사용하며 저장하지 않습니다. 실제
+            명세서 양식 검증은 아직 완료되지 않았습니다.
+          </p>
+          <form id="secure-form" autocomplete="off">
+            <label for="secure-card">보안 명세서 카드사</label
+            ><select id="secure-card">
+              <option value="삼성">삼성카드</option>
+              <option value="롯데">롯데카드</option>
+              <option value="현대">현대카드 (HTML)</option>
+              <option value="우리">우리카드 (HTML)</option>
+              <option value="신한">신한카드 (PDF)</option>
+            </select>
+            <div class="form-grid">
+              <label
+                >보안 명세서 파일<input
+                  type="file"
+                  id="secure-file"
+                  accept=".html,.htm,.pdf"
+                  required /></label
+              ><label
+                >명세서 비밀번호<input
+                  type="password"
+                  id="secure-password"
+                  autocomplete="off"
+                  maxlength="128"
+                  required
+              /></label>
+            </div>
+            <label for="secure-year">연도 없는 이용일에 적용할 연도 (선택)</label
+            ><input
+              id="secure-year"
+              type="number"
+              min="1900"
+              max="2100"
+              inputmode="numeric"
+              placeholder="예: 2026"
+            />
+            <p class="help">
+              10.03처럼 연도 없는 이용일에만 적용합니다. 명세서 발행 연도가 아니라 실제 이용 연도를
+              입력하세요. 서로 다른 연도의 거래가 섞여 있으면 일괄 지정하지 마세요.
+            </p>
+            <label id="secure-online-label"
+              ><input type="checkbox" id="secure-online" /> 삼성카드 공식 사이트에 연결해 내역과
+              더보기 불러오기</label
+            >
+            <p class="help" id="secure-online-help">
+              선택하면 명세서 열람에 필요한 정보가 삼성카드 공식 사이트로 전송됩니다. 연결은 이번
+              처리에만 사용합니다.
+            </p>
+            <button class="button primary" id="unlock-button">일회성으로 열기</button
+            ><span id="unlock-progress" class="help hidden" role="status">
+              명세서를 처리 중입니다. 최대 55초 걸릴 수 있어요.</span
+            >
+          </form>
+          <p class="help">
+            비밀번호와 원본 명세서는 파일·DB에 저장하지 않습니다. 추출된 표는 최대 10분 동안
+            메모리에 보관하며, 저장 버튼을 누르기 전에는 거래 내역을 DB에 기록하지 않습니다.
+            신뢰하는 개인 실행 환경에서만 사용하세요.
+          </p>
+          <div id="structure-download" class="hidden">
+            <p class="help">
+              날짜·금액·가맹점을 가상값으로 바꾸고 주소·인증 정보·스크립트를 제거한 구조 파일입니다.
+              저장해 내용을 확인한 뒤 오류 분석에 전달할 수 있습니다.
+            </p>
+            <button class="button" id="structure-button" type="button">
+              진단용 가상 구조 파일 받기
+            </button>
+          </div>
+        </section>
+      </section>
+      <!-- 명세서 검토: 표 선택 → 열 연결 → 행 확인 → 저장 순서입니다. -->
+      <section class="panel" id="review" data-view="review" hidden>
+        <div class="section-title">
+          <h2>명세서 검토</h2>
+          <button class="button" id="review-back" type="button">이전 단계</button>
+        </div>
+        <div id="secure-selection" class="hidden">
+          <div class="form-grid mapping-grid">
+            <label>추출 결과<select id="secure-table"></select></label
+            ><label>제목 행<input id="secure-header" type="number" min="1" value="1" /></label
+            ><label>마지막 거래 행<input id="secure-end" type="number" min="2" /></label>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <tbody id="secure-table-preview"></tbody>
+            </table>
+          </div>
+          <p class="help">
+            표 안의 행 번호입니다. 합계·안내 행은 마지막 거래 행에서 제외하세요. 표와 목록에서
+            추출한 거래 후보입니다. 여러 결과가 있으면 페이지별 표·이용 내역·취소 내역을 각각
+            확인·저장할 수 있습니다. PDF의 빈 셀·여러 줄·페이지 나눔으로 열이 어긋날 수 있으므로
+            원문과 대조하세요. 누락·금액 선택·할부를 원문과 대조하고 검토 안내 열을 확인하세요.
+            명시적인 취소·환불만 음수로 반영하며 부분취소는 확인이 필요합니다.
+          </p>
+          <button class="button" id="secure-use">날짜·금액 확인하기</button>
+        </div>
+        <div id="mapping" class="hidden">
+          <h3>어떤 열을 사용할까요?</h3>
+          <p class="help" id="preview-count"></p>
+          <label for="import-end">마지막 거래 행 (제목 제외)</label
+          ><input id="import-end" type="number" min="1" value="1" inputmode="numeric" required />
+          <p class="help">
+            아래 미리보기의 행 번호입니다. 1행부터 지정한 행까지만 저장합니다. 합계 행이 남아 있으면
+            마지막 거래까지만 선택하세요.
+          </p>
+          <div class="form-grid mapping-grid">
+            <label>이용일<select id="map-date"></select></label
+            ><label>가맹점<select id="map-merchant"></select></label
+            ><label>이용금액<select id="map-amount"></select></label
+            ><label
+              >실제·하위 가맹점 (선택)<select id="map-actual-merchant">
+                <option value="">없음</option>
+              </select></label
+            >
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead id="preview-head"></thead>
+              <tbody id="preview-body"></tbody>
+            </table>
+          </div>
+          <p class="help">
+            연도를 포함한 날짜가 필요합니다. 할부 내역은 선택한 금액 열 그대로 집계하며, 월별
+            청구액으로 나누지 않습니다. 동일 파일의 재등록은 차단하지만 서로 다른 파일의 겹치는
+            내역은 자동 제거하지 않습니다.
+          </p>
+          <button class="button primary" id="import-button">내역 저장하기</button>
+        </div>
+      </section>
+      <!-- 지출 관리: 할부·중복·고정 지출·월별 카드값을 확인합니다. -->
+      <section class="panel" id="planning" data-view="planning" hidden>
+        <div class="section-title">
+          <div>
+            <h2>지출 관리</h2>
+            <p>할부와 반복 결제를 확인하고, 겹치는 내역을 정리하세요.</p>
+          </div>
+          <button class="button" type="button" id="finance-refresh">새로고침</button>
+        </div>
+        <label for="finance-month">조회 기준 월</label><input id="finance-month" type="month" />
+        <div class="planning-tabs" aria-label="관리 자료 범위">
+          <button
+            class="button active"
+            type="button"
+            data-management-scope="personal"
+            aria-pressed="true"
+          >
+            내 관리
+          </button>
+          <button class="button" type="button" data-management-scope="shared" aria-pressed="false">
+            함께 열람
+          </button>
+        </div>
+        <div id="personal-management">
+          <div class="planning-tabs" aria-label="지출 관리 종류">
+            <button class="button" type="button" data-finance-tab="billing" aria-pressed="false">
+              카드값 · 명세서</button
+            ><button
+              class="button active"
+              type="button"
+              data-finance-tab="installments"
+              aria-pressed="true"
+            >
+              할부 일정</button
+            ><button
+              class="button"
+              type="button"
+              data-finance-tab="duplicates"
+              aria-pressed="false"
+            >
+              중복 검토</button
+            ><button class="button" type="button" data-finance-tab="recurring" aria-pressed="false">
+              고정 지출</button
+            ><button class="button" type="button" data-finance-tab="budgets" aria-pressed="false" hidden>
+              예산</button
+            ><button class="button" type="button" data-finance-tab="tax" aria-pressed="false" hidden>
+              소득공제</button
+            ><button
+              class="button"
+              type="button"
+              data-finance-tab="performance"
+              aria-pressed="false"
+              hidden
+            >
+              카드 실적
+            </button>
+          </div>
+          <p class="help" id="finance-state" role="status"></p>
+          <div data-finance-panel="billing" hidden>
+            <div id="billing-stats" class="pattern-highlights"></div>
+            <p class="help">
+              조회 월은 납부할 월입니다. 명세서를 대조해 확인 상태·최종 청구액·납부 여부를 직접
+              기록하세요. 이메일 수신이나 거래 저장만으로 확인·납부 완료로 바뀌지 않습니다. 미확인은
+              미수신 또는 미검토 상태를 뜻합니다.
+            </p>
+            <p class="help">
+              청구액 합계는 입력한 금액 기준입니다. 미입력 카드사가 있으면 실제 납부액이 더 클 수
+              있어요. 기본 결제일은 짧은 달의 말일로 맞추며, 휴일에 따른 실제 출금일은 월별로
+              수정하세요.
+            </p>
+            <p class="help" id="billing-state" role="status"></p>
+            <div id="billing-list"></div>
+            <details class="guidance">
+              <summary>내 카드사 추가 · 표시 이름 · 기본 결제일 설정</summary>
+              <p class="help">
+                기본 결제일은 매달 적용됩니다. 월별로 수정한 납부 예정일은 유지합니다. 사용 해제한
+                카드사는 누락 확인과 합계에서 빠지고 기록은 보관됩니다.
+              </p>
+              <p class="help">
+                이 설정은 본인에게만 적용합니다. 표시 이름을 바꿔도 원래 카드사와 과거 기록은
+                유지됩니다. 직접 추가한 카드사는 청구·할부 수동 관리용이며 명세서·문자 자동 판독
+                지원이 추가되지는 않습니다.
+              </p>
+              <form id="billing-card-add" class="finance-item">
+                <h3>내 카드사 추가</h3>
+                <div class="form-grid">
+                  <label
+                    >카드사 이름<input
+                      name="card"
+                      maxlength="40"
+                      required
+                      placeholder="예: 하나, NH농협"
+                  /></label>
+                  <label
+                    >나의 표시 이름 (선택)<input
+                      name="display_name"
+                      maxlength="40"
+                      placeholder="예: 생활비 카드"
+                  /></label>
+                  <label
+                    >기본 결제일 (선택)<input
+                      name="due_day"
+                      type="number"
+                      min="1"
+                      max="31"
+                      step="1"
+                      inputmode="numeric"
+                  /></label>
+                </div>
+                <p class="help" id="billing-card-add-error" role="alert"></p>
+                <button class="button primary">내 카드사 추가</button>
+              </form>
+              <div id="billing-settings"></div>
+            </details>
+          </div>
+          <div data-finance-panel="installments">
+            <div id="installment-stats" class="pattern-highlights"></div>
+            <p class="notice hidden" id="installment-past"></p>
+            <h3>앞으로 12개월 원금 납부 예상</h3>
+            <div id="installment-schedule" class="schedule-grid"></div>
+            <details class="guidance" id="installment-editor">
+              <summary>할부 등록 · 수정</summary>
+              <p class="help">
+                원금과 회차를 명세서에서 확인해 입력하세요. 원금을 균등 분할하고 나머지는 마지막
+                회차에 반영합니다. 수수료·이자는 포함하지 않으며, 실제 청구 내역과 대조하세요. 완료
+                회차는 직접 갱신하며 예상액은 사용 내역에 추가하지 않습니다.
+              </p>
+              <form id="installment-form">
+                <div class="form-grid">
+                  <label
+                    >할부 이름<input
+                      id="plan-name"
+                      maxlength="160"
+                      required
+                      placeholder="예: 노트북" /></label
+                  ><label
+                    >카드사<select id="plan-card" required>
+                      <option value="">선택</option>
+                      <option>신한</option>
+                      <option>삼성</option>
+                      <option>현대</option>
+                      <option>KB국민</option>
+                      <option>우리</option>
+                      <option>롯데</option>
+                    </select></label
+                  ><label
+                    >전체 할부 원금 (원)<input
+                      id="plan-principal"
+                      type="number"
+                      min="2"
+                      max="1000000000000"
+                      step="1"
+                      inputmode="numeric"
+                      required /></label
+                  ><label
+                    >총 회차<input
+                      id="plan-months"
+                      type="number"
+                      min="2"
+                      max="60"
+                      step="1"
+                      value="12"
+                      required /></label
+                  ><label>첫 납부 월<input id="plan-first-month" type="month" required /></label
+                  ><label
+                    >납부 완료 회차<input
+                      id="plan-paid"
+                      type="number"
+                      min="0"
+                      max="60"
+                      step="1"
+                      value="0"
+                      required
+                  /></label>
+                </div>
+                <button class="button primary" id="plan-save">할부 저장</button
+                ><button class="button" type="button" id="plan-reset">입력 초기화</button>
+              </form>
+            </details>
+            <div id="installment-list"></div>
+          </div>
+          <div data-finance-panel="duplicates" hidden>
+            <p class="help">
+              전체 기간에서 서로 다른 파일의 카드사·이용일·가맹점·금액이 같은 내역을 비교합니다.
+              이메일과 직접 업로드한 파일도 함께 비교합니다. 같은 날 같은 금액의 실제 결제나 할부의
+              반복 청구일 수 있으니 원문·청구 월을 대조한 뒤 중복 건만 제외하세요. 제외한 거래는
+              보관되며 소비 분석에서 빠집니다.
+            </p>
+            <div id="duplicate-list"></div>
+            <details class="guidance">
+              <summary>집계에서 제외한 내역 · 복원</summary>
+              <div id="excluded-list"></div>
+            </details>
+          </div>
+          <div data-finance-panel="recurring" hidden>
+            <section id="subscription-summary" class="finance-item" hidden>
+              <h3>구독·정기 결제 요약</h3>
+              <div id="subscription-stats" class="pattern-highlights"></div>
+              <div id="subscription-list"></div>
+            </section>
+            <p class="help">
+              기준 월 또는 직전 월까지 3개월 이상 연속으로, 매달 1회 비슷한 날짜에 결제된 가맹점을
+              찾습니다. 취소·환불이 있거나 월 여러 번 결제한 달은 제외합니다. 고정 지출 후보이며
+              다음 금액·날짜는 최근 결제 기준 예상입니다.
+            </p>
+            <div id="recurring-stats" class="pattern-highlights"></div>
+            <div id="recurring-list"></div>
+            <details class="guidance">
+              <summary>고정 지출에서 제외한 후보</summary>
+              <div id="recurring-ignored"></div>
+            </details>
+          </div>
+          <!-- 분야별 예산: static/planning-tools.js가 /api/budgets로 채웁니다. -->
+          <div data-finance-panel="budgets" hidden>
+            <p class="help">
+              분야별로 한 달 예산을 정하면 80% 이상 쓰거나 넘었을 때 대시보드에서 알려 줘요. 이번 달
+              지난 날짜보다 빨리 쓰는 분야도 표시합니다. 0원이나 빈칸은 예산을 두지 않는 분야입니다.
+            </p>
+            <p class="help" id="budget-state" role="status"></p>
+            <div id="budget-list"></div>
+            <form id="budget-form" class="finance-item">
+              <h3>월 예산 정하기</h3>
+              <div id="budget-inputs" class="budget-inputs"></div>
+              <p class="help" id="budget-error" role="alert"></p>
+              <button class="button primary" id="budget-save">예산 저장</button>
+            </form>
+          </div>
+          <!-- 연말정산 카드 공제: static/planning-tools.js가 /api/tax-deduction으로 채웁니다. -->
+          <div data-finance-panel="tax" hidden>
+            <p class="help">
+              올해 카드 사용액으로 신용카드 등 소득공제를 추정합니다. 총급여의 25%를 넘게 쓴
+              금액부터 공제되며, 넘은 뒤에는 체크카드·현금영수증(30%)이 신용카드(15%)보다 유리해요.
+              대중교통·문화비는 가맹점 이름으로 추정하고, 전통시장·현금영수증은 아래에서 직접
+              더하세요. 실제 금액은 홈택스 연말정산 간소화 자료로 확인하세요.
+            </p>
+            <p class="help" id="tax-state" role="status"></p>
+            <div id="tax-result"></div>
+            <form id="tax-form" class="finance-item">
+              <h3>내 정보</h3>
+              <div class="form-grid">
+                <label
+                  >올해 총급여 (예상, 원)<input
+                    name="salary"
+                    inputmode="numeric"
+                    placeholder="예: 50,000,000"
+                /></label>
+                <label
+                  >공제 대상 자녀 수<input
+                    name="children"
+                    type="number"
+                    min="0"
+                    max="20"
+                    step="1"
+                    value="0"
+                /></label>
+              </div>
+              <fieldset>
+                <legend>카드사별 종류</legend>
+                <p class="help">
+                  신용·체크를 함께 쓰는 카드사는 ‘혼합’으로 두면 공제율이 낮은 신용카드로 보수적으로
+                  계산합니다.
+                </p>
+                <div id="tax-issuers" class="budget-inputs"></div>
+              </fieldset>
+              <fieldset>
+                <legend>모아에 없는 사용액 (원)</legend>
+                <p class="help">
+                  모아에 자료가 없는 달, 현금영수증, 전통시장 사용액을 홈택스·카드사 앱에서 확인해
+                  더하세요.
+                </p>
+                <div id="tax-adjustments" class="budget-inputs"></div>
+              </fieldset>
+              <p class="help" id="tax-error" role="alert"></p>
+              <button class="button primary" id="tax-save">저장하고 다시 계산</button>
+            </form>
+          </div>
+          <!-- 카드 실적: static/card-performance.js가 /api/card-performance로 채웁니다. -->
+          <div data-finance-panel="performance" hidden>
+            <p class="help">
+              조회 기준 월에 쓴 금액이 다음 달 혜택 구간을 정합니다. 할인받은 금액·무이자할부·상품권
+              등 카드사가 빼는 결제는 거래 자료로 구분할 수 없어 카드사 앱의 실적과 다를 수 있어요.
+              분야 단위 제외만 반영합니다.
+            </p>
+            <p class="help" id="card-performance-state" role="status"></p>
+            <div id="card-performance-list"></div>
+            <section id="card-performance-unassigned" class="finance-item" hidden>
+              <h3>카드를 알 수 없는 거래</h3>
+              <p class="help">
+                같은 카드사 카드가 여러 장이면 카드 번호 끝자리로 나눕니다. 아래 끝자리를 해당
+                카드에 입력하세요. 끝자리가 없는 거래는 명세서를 카드에 연결하면 반영됩니다.
+              </p>
+              <div id="card-performance-unassigned-list"></div>
+            </section>
+            <section id="card-performance-statements" class="finance-item" hidden>
+              <h3>명세서를 카드에 연결</h3>
+              <p class="help">
+                카드 한 장짜리 명세서(예: 현대카드)만 연결하세요. 여러 카드가 섞인 통합 명세서는
+                연결하지 않습니다.
+              </p>
+              <div id="card-performance-statement-list"></div>
+            </section>
+            <details class="guidance" id="card-product-editor">
+              <summary id="card-product-summary">내 카드 추가</summary>
+              <form id="card-product-form" class="finance-item">
+                <label
+                  >추천 값 불러오기<select id="card-product-preset">
+                    <option value="">직접 입력</option>
+                  </select></label
+                >
+                <div class="form-grid">
+                  <label>카드사<select name="issuer" required></select></label>
+                  <label>카드 이름<input name="name" maxlength="60" required /></label>
+                  <label
+                    >카드 번호 끝 4자리 (쉼표로 여러 개)<input
+                      name="last_fours"
+                      inputmode="numeric"
+                      placeholder="예: 1234, 5678"
+                  /></label>
+                </div>
+                <label
+                  >혜택별 실적 기준 (한 줄에 하나: 혜택 이름, 금액)<textarea
+                    name="benefits"
+                    rows="4"
+                    placeholder="국내 전가맹점 0.8% 적립, 500000"
+                  ></textarea>
+                </label>
+                <fieldset>
+                  <legend>실적에서 뺄 분야</legend>
+                  <div id="card-product-categories" class="checkbox-grid"></div>
+                </fieldset>
+                <label>메모<input name="note" maxlength="200" /></label>
+                <p class="help" id="card-product-error" role="alert"></p>
+                <button class="button primary" id="card-product-save">카드 저장</button
+                ><button class="button" type="button" id="card-product-reset">입력 초기화</button>
+              </form>
+            </details>
+          </div>
+        </div>
+        <section id="shared-management" hidden>
+          <p class="help">
+            분류 규칙·할부·중복 검토·고정 지출과 카드 청구·납부 설정을 구성원별로 함께 봅니다. 이
+            화면은 읽기 전용입니다. 수정·제외·복원은 본인이 ‘내 관리’에서 처리하세요.
+          </p>
+          <p class="help">
+            분류 규칙·중복 후보·반복 결제에 필요한 가맹점·날짜·금액은 이 화면에서 공유됩니다. 원본
+            명세서·파일명·메일·메모와 일반 거래 목록은 공개하지 않습니다.
+          </p>
+          <p class="help" id="shared-management-state" role="status"></p>
+          <div id="shared-management-list"></div>
+        </section>
+      </section>
+      <!-- 저장 기록: 등록한 파일을 확인하거나 그 파일의 거래를 삭제합니다. -->
+      <section class="panel" id="history" data-view="history" hidden>
+        <div class="section-title">
+          <div>
+            <h2>저장 기록</h2>
+            <p>잘못 올린 파일은 삭제하고 다시 등록할 수 있어요.</p>
+          </div>
+        </div>
+        <div id="imports"></div>
+        <button class="button hidden" id="history-more" type="button">저장 기록 더 보기</button>
+      </section>
+      <!-- 문자 임시내역은 개인용이며 명세서 원장과 합산하지 않습니다. -->
+      <section class="panel" id="sms" data-view="sms" hidden>
+        <div class="section-title">
+          <h2>실시간 소비 · 문자</h2>
+          <button class="button" type="button" id="sms-refresh">새로고침</button>
+        </div>
+        <p class="help">
+          현재 KB국민·신한·삼성·현대카드 국내 원화 승인·취소 문자를 지원합니다. 연도는 한국 수신
+          시각 기준으로 추정합니다. 본인에게만 표시하며 명세서·통합 지출·청구액에 자동 합산하지
+          않습니다.
+        </p>
+        <details class="guidance" id="sms-setup">
+          <summary>아이폰 단축어 연결 · 수신 키 관리</summary>
+          <p class="help" id="sms-key-state" role="status"></p>
+          <label>단축어 전송 주소<input id="sms-endpoint" readonly /></label>
+          <div class="planning-tabs">
+            <button class="button" type="button" id="sms-key-create">
+              새 키 발급 · 기존 키 교체
+            </button>
+            <button class="button" type="button" id="sms-key-revoke">수신 키 해제</button>
+          </div>
+          <div id="sms-key-result" hidden>
+            <label
+              >이번에만 표시하는 수신 키<textarea
+                id="sms-key-value"
+                readonly
+                rows="2"
+                autocomplete="off"
+                spellcheck="false"
+              ></textarea>
+            </label>
+            <p class="help">
+              단축어 Authorization 헤더에 Bearer 다음 공백과 이 키를 넣으세요. 키는 본문·URL에
+              넣거나 다른 사람에게 보내지 마세요. 화면을 이동하거나 90초가 지나면 표시를 지웁니다.
+            </p>
+            <button class="button" type="button" id="sms-key-hide">키 표시 지우기</button>
+          </div>
+          <p class="help">
+            자동화 조건은 카드사 발신 번호로 제한하고 Tailscale을 켜 두세요. 키 교체·해제 시 기존
+            단축어의 전송은 중단됩니다. 키로는 내역 조회·수정이 불가능합니다.
+          </p>
+          <a
+            class="button"
+            href="https://github.com/Tira-studying/moa/blob/main/deploy/SMS.md"
+            target="_blank"
+            rel="noopener noreferrer"
+            >아이폰 설정 안내</a
+          >
+        </details>
+        <div class="finance-toolbar">
+          <label>이용 월<input id="sms-month" type="month" /></label>
+          <label><input id="sms-show-completed" type="checkbox" /> 제외 내역도 보기</label>
+        </div>
+        <div class="finance-stats" id="sms-stats"></div>
+        <p class="help">
+          받은 문자 중 제외하지 않은 소비 합계입니다. 대조 완료 후에도 내역과 합계는 유지됩니다.
+          취소가 이전 달 승인에 대한 것이면 음수가 될 수 있습니다. 할부도 승인 원금 전체이며 이번 달
+          납부액이 아닙니다.
+        </p>
+        <p class="help" id="sms-state" role="status"></p>
+        <p class="help">
+          명세서에 같은 카드사·날짜·가맹점·금액이 있으면 대조 후보로 표시합니다. 실제 명세서를
+          확인한 뒤 ‘명세서와 대조 완료’를 누르세요. 문자는 받는 즉시 이 화면에 저장되며, 이 버튼은
+          대조 상태만 바꿉니다. 같은 내용·분의 문자는 재전송으로 취급하므로 정상 반복 결제는
+          명세서로 확인해야 합니다.
+        </p>
+        <div id="sms-list"></div>
+      </section>
+      <!-- 계정·공동 관리: 최종 권한은 서버에서 다시 확인합니다. -->
+      <section class="panel" id="bank" data-view="bank" hidden>
+        <div class="section-title">
+          <h2>계좌 입출금</h2>
+          <a class="button" href="#sharing">더보기</a>
+        </div>
+        <p class="help">
+          소비로 집계할 출금만 체크해 주세요. 선택하지 않은 내역은 합계에 넣지 않으며, 체크를
+          해제하면 반영을 취소합니다. 입출금 상세는 본인에게만 표시합니다.
+        </p>
+        <div class="bank-toolbar">
+          <label>조회 월<input type="month" id="bank-month" /></label>
+          <label
+            >소비 선택<select id="bank-review-filter">
+              <option value="all">전체 입출금</option>
+              <option value="selected">소비로 선택한 출금</option>
+              <option value="unselected">선택하지 않은 출금</option>
+              <option value="pending">중복 확인 필요</option>
+            </select></label
+          >
+          <button class="button" type="button" id="bank-reload">화면 새로고침</button>
+        </div>
+        <details class="guidance" id="bank-connection-details">
+          <summary>자동 수집 연결·상태</summary>
+          <p class="help" role="status" id="bank-state"></p>
+          <div id="bank-links"></div>
+          <button class="button" type="button" id="bank-request" disabled>지금 수집</button>
+          <a class="button" href="#connections">카드·계좌 연결</a>
+        </details>
+        <p class="help" id="bank-review-summary"></p>
+        <button class="button" type="button" id="bank-next-pending" hidden>
+          다른 월의 중복 확인
+        </button>
+        <div id="bank-transactions"></div>
+      </section>
+      <section class="panel connection-panel" id="connections" data-view="connections" hidden>
+        <div class="section-title">
+          <h2>내 카드·계좌 연결</h2>
+          <a class="button" href="#sharing">더보기</a>
+        </div>
+        <p class="help">
+          본인 명의의 카드·계좌를 지금 로그인한 모아 계정에 연결합니다. 공동관리자도 본인 휴대폰에서
+          진행할 수 있습니다.
+        </p>
+        <p id="connection-state" class="help" role="status">연결 설정을 확인하고 있습니다.</p>
+        <button id="connection-status-refresh" class="button" type="button">진행 상태 확인</button>
+        <form id="connection-form" autocomplete="off">
+          <fieldset id="connection-inputs">
+            <legend>연결할 금융기관</legend>
+            <label
+              >종류<select id="connection-kind">
+                <option value="card">카드</option>
+                <option value="bank">계좌</option>
+              </select></label
+            >
+            <label>금융기관<select id="connection-provider" required></select></label>
+            <p class="help">
+              앱 간편번호가 아닌 카드사·은행 홈페이지의 아이디와 비밀번호를 입력해 주세요.
+            </p>
+            <label
+              >홈페이지 아이디<input
+                type="text"
+                id="connection-login-id"
+                maxlength="200"
+                autocomplete="off"
+                autocapitalize="off"
+                spellcheck="false"
+                required
+            /></label>
+            <label
+              >홈페이지 비밀번호<input
+                type="password"
+                id="connection-password"
+                maxlength="200"
+                autocomplete="new-password"
+                required
+            /></label>
+            <div id="connection-hyundai" hidden>
+              <label
+                >현대카드 전체 카드번호<input
+                  type="password"
+                  id="connection-card-number"
+                  inputmode="numeric"
+                  pattern="[0-9]{14,19}"
+                  minlength="14"
+                  maxlength="19"
+                  autocomplete="off"
+              /></label>
+              <label
+                >카드 비밀번호 4자리<input
+                  type="password"
+                  id="connection-card-pin"
+                  inputmode="numeric"
+                  pattern="[0-9]{4}"
+                  minlength="4"
+                  maxlength="4"
+                  autocomplete="new-password"
+              /></label>
+            </div>
+            <div id="connection-kb" hidden>
+              <p class="help">
+                KB는 하루 첫 조회마다 카드 소지 확인을 요구합니다. 여기서 입력하면 한 번 확인한 뒤
+                저장해 매일 자동 조회에 씁니다.
+              </p>
+              <label
+                >KB 전체 카드번호<input
+                  type="password"
+                  id="connection-kb-card-number"
+                  inputmode="numeric"
+                  pattern="[0-9]{14,19}"
+                  minlength="14"
+                  maxlength="19"
+                  autocomplete="off"
+              /></label>
+              <label
+                >카드 비밀번호 앞 2자리만<input
+                  type="password"
+                  id="connection-kb-card-pin"
+                  inputmode="numeric"
+                  pattern="[0-9]{2}"
+                  minlength="2"
+                  maxlength="2"
+                  autocomplete="new-password"
+              /></label>
+            </div>
+            <div id="connection-bank" hidden>
+              <label
+                >생년월일 8자리 (YYYYMMDD)<input
+                  type="password"
+                  id="connection-birth"
+                  inputmode="numeric"
+                  pattern="[0-9]{8}"
+                  minlength="8"
+                  maxlength="8"
+                  autocomplete="off"
+              /></label>
+              <label
+                >본인 원화 입출금 계좌번호<input
+                  type="password"
+                  id="connection-account"
+                  inputmode="numeric"
+                  pattern="[0-9]{10,16}"
+                  minlength="10"
+                  maxlength="16"
+                  autocomplete="off"
+              /></label>
+              <label
+                >계좌 비밀번호 4자리<input
+                  type="password"
+                  id="connection-account-pin"
+                  inputmode="numeric"
+                  pattern="[0-9]{4}"
+                  minlength="4"
+                  maxlength="4"
+                  autocomplete="new-password"
+              /></label>
+            </div>
+            <div id="connection-lotte" hidden>
+              <label
+                >본인 이름<input
+                  type="password"
+                  id="connection-name"
+                  maxlength="80"
+                  autocomplete="off"
+              /></label>
+              <label
+                >생년월일 6자리 + 주민번호 뒷자리 첫 숫자 (총 7자리)<input
+                  type="password"
+                  id="connection-identity"
+                  inputmode="numeric"
+                  pattern="[0-9]{7}"
+                  minlength="7"
+                  maxlength="7"
+                  autocomplete="off"
+              /></label>
+              <label
+                >본인 명의 휴대폰번호<input
+                  type="password"
+                  id="connection-phone"
+                  inputmode="tel"
+                  pattern="01[016789][0-9]{7,8}"
+                  maxlength="11"
+                  autocomplete="off"
+              /></label>
+              <label
+                >통신사<select id="connection-telecom">
+                  <option value="">선택해 주세요</option>
+                  <option value="0">SKT</option>
+                  <option value="1">KT</option>
+                  <option value="2">LG U+</option>
+                  <option value="3">SKT 알뜰폰</option>
+                  <option value="4">KT 알뜰폰</option>
+                  <option value="5">LG U+ 알뜰폰</option>
+                </select></label
+              >
+            </div>
+            <p class="help" id="connection-consent-text"></p>
+            <p class="help">
+              비밀번호 오류가 누적되면 금융기관 이용이 제한될 수 있습니다. 확실한 정보로 한 번만
+              진행해 주세요. 실패해도 기존 연결과 내역은 유지합니다.
+            </p>
+            <label class="connection-consent"
+              ><input type="checkbox" id="connection-consent" required /><span
+                >본인 정보 전송과 위 암호화 저장에 동의합니다.</span
+              ></label
+            >
+            <button class="button primary" id="connection-start" type="submit">
+              인증하고 연결하기
+            </button>
+          </fieldset>
+        </form>
+        <section id="connection-progress" hidden aria-live="polite">
+          <h3>연결 진행</h3>
+          <p id="connection-progress-message"></p>
+          <form id="connection-challenge-form" autocomplete="off" hidden>
+            <label id="connection-code-label"
+              >인증번호<input
+                type="password"
+                id="connection-code"
+                maxlength="32"
+                autocomplete="one-time-code"
+            /></label>
+            <div id="connection-kb-auth" hidden>
+              <p class="help">
+                KB 카드 소지 확인이 필요합니다. KB는 하루 첫 조회마다 이 확인을 다시 요구합니다.
+              </p>
+              <label
+                >KB 전체 카드번호<input
+                  type="password"
+                  id="connection-kb-number"
+                  inputmode="numeric"
+                  pattern="[0-9]{14,19}"
+                  minlength="14"
+                  maxlength="19"
+                  autocomplete="off"
+              /></label>
+              <label
+                >카드 비밀번호 앞 2자리만<input
+                  type="password"
+                  id="connection-kb-pin"
+                  inputmode="numeric"
+                  pattern="[0-9]{2}"
+                  minlength="2"
+                  maxlength="2"
+                  autocomplete="new-password"
+              /></label>
+              <label class="connection-kb-remember"
+                ><input type="checkbox" id="connection-kb-remember" /> 매일 자동 조회에 쓰도록
+                저장
+                <small
+                  >카드번호와 암호화된 비밀번호 앞 2자리를 한 번 더 암호화해 이 서버에만 둡니다.
+                  KB가 소지 확인을 요구할 때만 한 번 쓰고, 실패하면 다시 시도하지 않습니다.</small
+                ></label
+              >
+            </div>
+            <button class="button primary" type="submit" id="connection-answer">
+              추가 인증 확인
+            </button>
+          </form>
+          <button class="button" type="button" id="connection-cancel">인증 취소</button>
+          <button class="button" type="button" id="connection-new" hidden>
+            다른 카드·계좌 연결
+          </button>
+        </section>
+      </section>
+      <section class="panel" id="sharing" data-view="sharing" hidden>
+        <nav class="account-shortcuts" aria-label="추가 메뉴">
+          <a class="button" href="#connections">카드·계좌 연결</a>
+          <a class="button" href="#bank">계좌 입출금</a>
+          <a class="button" href="#mail-inbox">이메일 명세서</a
+          ><a class="button" href="#history">저장 기록</a
+          ><button class="button" type="button" id="account-logout-button">로그아웃</button>
+        </nav>
+        <div class="section-title">
+          <h2>계정 · 공동 관리</h2>
+          <button class="button" id="members-refresh" type="button">새로고침</button>
+        </div>
+        <p class="help" id="members-state" role="status"></p>
+        <!-- 홈 화면 설치 안내: 브라우저가 지원하는 설치 경로를 pwa.js에서 표시합니다. -->
+        <details class="guidance" id="pwa-install-guide">
+          <summary>휴대폰 홈 화면에 설치</summary>
+          <p class="help" id="pwa-install-status"></p>
+          <button class="button" id="pwa-install" type="button" hidden>모아 설치</button>
+          <p class="help">
+            설치 후에도 인터넷과 Tailscale 연결이 필요합니다. 기존 모아 계정으로 로그인합니다.
+          </p>
+        </details>
+        <p class="help">
+          각자 자신의 명세서·거래·메일을 관리합니다. 대시보드의 통합 합계와 지출 관리의 함께
+          열람에서 허용된 관리 정보를 공유합니다. 거래 목록·메모는 아래 ‘내 사용 내역 함께 보기’가
+          켜진 사람의 것이 상대에게 읽기 전용으로 보이고(숨긴 거래 제외), 원본 명세서와 수정 권한은
+          비공개로 유지합니다. 소유자는 공동관리자 1명의 계정 접근을 관리합니다.
+        </p>
+        <label class="feature-toggle share-toggle"
+          ><input type="checkbox" data-feature="share_transactions" /> 내 사용 내역 함께 보기
+          <span class="help"
+            >기본으로 켜져 있어요. 다른 구성원이 사용 내역의 ‘함께 보기’에서 내 날짜·사용처·금액·분야·카드사·메모를
+            읽기 전용으로 봅니다. 원본 명세서는 보이지 않고, 가릴 거래는 거래 상세에서 ‘상대에게
+            숨기기’를 고르면 돼요. 끄면 전체가 보이지 않습니다.</span
+          ></label
+        >
+        <details class="guidance" id="feature-settings">
+          <summary>화면 기능 켜기 · 끄기</summary>
+          <p class="help">
+            필요한 기능만 켜서 화면을 단순하게 쓸 수 있어요. 본인 화면에만 적용되고, 꺼도 입력한
+            설정은 지워지지 않습니다.
+          </p>
+          <label class="feature-toggle"
+            ><input type="checkbox" data-feature="budgets" /> 분야별 예산
+            <span class="help">지출 관리의 ‘예산’ 탭, 대시보드 예산 요약·초과 알림</span></label
+          >
+          <label class="feature-toggle"
+            ><input type="checkbox" data-feature="tax_deduction" /> 연말정산 카드 공제
+            <span class="help">지출 관리의 ‘소득공제’ 탭과 대시보드 요약</span></label
+          >
+          <label class="feature-toggle"
+            ><input type="checkbox" data-feature="subscriptions" /> 구독·정기 결제
+            <span class="help">고정 지출 탭의 요약과 대시보드의 다가오는 정기 결제</span></label
+          >
+          <label class="feature-toggle"
+            ><input type="checkbox" id="card-performance-enabled" /> 카드 실적 보기
+            <span class="help">지출 관리의 ‘카드 실적’ 탭과 대시보드 요약</span></label
+          >
+        </details>
+        <details class="guidance" id="codef-sync-panel">
+          <summary>내 카드 자동 수집 · CODEF</summary>
+          <p class="help">
+            한국시간 00:00·08:00·14:00·20:00에 수집합니다. 검증된 지출은 사용 내역에 자동 저장하며,
+            추가 인증이 필요한 카드는 멈춥니다. <a href="#connections">카드·계좌 연결</a>에서 본인이
+            인증할 수 있습니다.
+          </p>
+          <div class="planning-tabs">
+            <button class="button" id="codef-sync-refresh" type="button">상태 새로고침</button>
+            <button class="button" id="codef-sync-request" type="button">지금 수집 요청</button>
+          </div>
+          <p class="help" id="codef-sync-state" role="status">본인 연결 상태를 확인하세요.</p>
+          <div id="codef-sync-links"></div>
+          <h3>확인이 필요한 내역</h3>
+          <p class="help">
+            중복 후보·금액이 불명확한 취소·외화는 자동으로 더하지 않습니다. 아래 제외는 기존 원장을
+            변경하지 않습니다. 나중에 명세서를 등록하면 지출 관리의 중복 검토도 확인하세요.
+          </p>
+          <div id="codef-sync-review"></div>
+        </details>
+        <details class="guidance" id="codef-settings" hidden>
+          <summary>CODEF 데모 개발자 인증</summary>
+          <p class="help">
+            이 버튼은 서버 데모 키의 개발자 인증만 확인합니다. 개인 카드 연결과 자동 수집 상태는
+            위의 ‘내 카드 자동 수집’에서 확인하세요. 인증 성공이 실제 카드 조회 권한을 보장하지는
+            않습니다.
+          </p>
+          <p class="help" id="codef-state" role="status">서버 설정 상태를 확인해 주세요.</p>
+          <div class="planning-tabs">
+            <button class="button" id="codef-refresh" type="button">설정 상태 새로고침</button>
+            <button class="button primary" id="codef-check" type="button" disabled>
+              개발자 인증 확인
+            </button>
+          </div>
+          <p class="help">
+            Client ID·Secret·공개키는 서버 터미널에서 설정합니다. 실제 값이나 발급 토큰을 화면에
+            표시하지 않습니다. 인증 요청은 버튼을 누를 때만 전송하며 1분에 한 번 가능합니다.
+          </p>
+          <a
+            class="button"
+            href="https://github.com/Tira-studying/moa/blob/main/deploy/CODEF.md"
+            target="_blank"
+            rel="noopener noreferrer"
+            >데모 키 설정 안내</a
+          >
+        </details>
+        <div id="members-owner" hidden>
+          <h3>공동관리자 계정 추가</h3>
+          <form id="member-form" autocomplete="off">
+            <div class="form-grid">
+              <label
+                >아이디<input
+                  id="member-name"
+                  pattern="[a-z0-9][a-z0-9_-]{2,39}"
+                  minlength="3"
+                  maxlength="40"
+                  required
+                  autocomplete="off"
+                  placeholder="영문 소문자·숫자·_·-" /></label
+              ><label
+                >초기 비밀번호<input
+                  id="member-password"
+                  type="password"
+                  minlength="12"
+                  maxlength="128"
+                  required
+                  autocomplete="new-password" /></label
+              ><label
+                >비밀번호 확인<input
+                  id="member-confirm"
+                  type="password"
+                  minlength="12"
+                  maxlength="128"
+                  required
+                  autocomplete="new-password"
+              /></label>
+            </div>
+            <p class="help">
+              초기 비밀번호는 별도로 안전하게 전달하고 공동관리자가 첫 로그인 후 본인 비밀번호로
+              변경하세요.
+            </p>
+            <button class="button primary">계정 추가</button>
+          </form>
+          <div id="member-list"></div>
+          <details class="guidance">
+            <summary>공동관리자 비밀번호 재설정</summary>
+            <form id="member-reset-form">
+              <label>계정<select id="member-reset-id"></select></label
+              ><label
+                >새 비밀번호<input
+                  id="member-reset-password"
+                  type="password"
+                  minlength="12"
+                  maxlength="128"
+                  required
+                  autocomplete="new-password" /></label
+              ><button class="button">재설정 · 해당 계정 로그아웃</button>
+            </form>
+          </details>
+        </div>
+        <details class="guidance">
+          <summary>내 비밀번호 변경</summary>
+          <form id="own-password-form">
+            <label
+              >현재 비밀번호<input
+                id="own-current-password"
+                type="password"
+                maxlength="128"
+                required
+                autocomplete="current-password" /></label
+            ><label
+              >새 비밀번호<input
+                id="own-new-password"
+                type="password"
+                minlength="12"
+                maxlength="128"
+                required
+                autocomplete="new-password" /></label
+            ><label
+              >새 비밀번호 확인<input
+                id="own-confirm-password"
+                type="password"
+                minlength="12"
+                maxlength="128"
+                required
+                autocomplete="new-password" /></label
+            ><button class="button">변경 · 내 계정 로그아웃</button>
+          </form>
+        </details>
+        <details class="guidance">
+          <summary>서로 다른 Tailscale 계정으로 접속하기</summary>
+          <p class="help">
+            소유자의 Tailscale 관리 화면에서 moa-card 장치만 Share로 초대하세요. 공동관리자는 본인
+            Tailscale 계정으로 초대를 수락하고 Tailscale을 켠 뒤 기존 모아 주소로 접속합니다. NAS
+            본체 장치나 SSH 권한을 공유할 필요는 없습니다.
+          </p>
+          <p class="help">
+            장치 공유와 모아 로그인 권한은 별개입니다. 접근 종료 시 모아 계정을 해제하고 Tailscale
+            장치 공유도 제거하세요. 장치 공유 초대 링크와 모아 비밀번호는 공개하지 마세요.
+          </p>
+        </details>
+        <h3>내 변경 이력 · 계정 관리 이력</h3>
+        <p class="help">
+          내 자료의 저장·수정·삭제와 공동 계정 관리 변경을 최근 100건 표시합니다. 상대방의 개인 변경
+          이력은 표시하지 않습니다. 비밀번호·원본 파일·메모 내용은 이력에 기록하지 않습니다.
+        </p>
+        <div id="audit-list"></div>
+      </section>
+      <footer>
+        모아 · 나의 지출을 이해하는 작은 습관
+        <span>사용 내역 분석용 · 카드사 청구서와 대조해 주세요.</span>
+      </footer>
+    </main>
+    <!-- 모바일 하단 메뉴: 본문 화면과 같은 탭을 가리킵니다. -->
+    <nav class="mobile-nav" aria-label="주 메뉴">
+      <a href="#dashboard">◫<span>대시보드</span></a
+      ><a href="#activity">▤<span>사용 내역</span></a
+      ><a href="#upload" class="mobile-add">＋<span>추가</span></a
+      ><a href="#planning">▦<span>지출 관리</span></a
+      ><a href="#sharing">☰<span>더보기</span></a>
+    </nav>
+    <!-- 분야 이름은 개인 설정이며 실제 거래의 분류 키와 금액은 유지합니다. -->
+    <dialog
+      id="category-manager"
+      class="transaction-editor"
+      aria-labelledby="category-manager-title"
+    >
+      <div class="section-title">
+        <h2 id="category-manager-title">내 소비 분야 관리</h2>
+        <button class="button" type="button" id="category-manager-close">닫기</button>
+      </div>
+      <p class="help">
+        나만의 분야를 추가하거나 이름을 바꿔 보세요. 이름 변경은 내 기존·새 거래에 함께 반영됩니다.
+        다른 계정의 설정은 바뀌지 않습니다. 직접 추가한 분야는 거래·분류 규칙에 쓰지 않을 때 삭제할
+        수 있습니다.
+      </p>
+      <form id="category-create-form" class="category-setting-row">
+        <label
+          >새 분야 이름<input
+            id="category-new-name"
+            maxlength="24"
+            required
+            placeholder="예: 반려동물"
+        /></label>
+        <button class="button primary" type="submit">추가</button>
+      </form>
+      <p class="help" id="category-manager-state" role="status"></p>
+      <div id="category-settings-list"></div>
+    </dialog>
+    <!-- 계좌 출금 확인: 외부 조회 없이 이미 저장한 본인 기록만 정리합니다. -->
+    <dialog id="bank-review-editor" class="transaction-editor bank-review-editor">
+      <form id="bank-review-form">
+        <div class="section-title">
+          <h2 id="bank-review-title">계좌 분류·상세</h2>
+          <button class="button" type="button" id="bank-review-close">닫기</button>
+        </div>
+        <p id="bank-review-original" class="help"></p>
+        <p id="bank-review-hint" class="help"></p>
+        <label id="bank-decision-label"
+          >출금의 성격<select id="bank-review-decision" required>
+            <option value="">선택해 주세요</option>
+          </select></label
+        >
+        <fieldset id="bank-expense-fields" hidden>
+          <legend>실제 지출로 반영할 내용</legend>
+          <label
+            >사용처<input id="bank-expense-merchant" maxlength="500" placeholder="실제로 결제한 곳"
+          /></label>
+          <label>소비 분야<select id="bank-expense-category"></select></label>
+          <label
+            >메모 (선택)<textarea id="bank-expense-memo" maxlength="500" rows="2"></textarea>
+          </label>
+        </fieldset>
+        <section id="bank-card-candidates" class="bank-card-candidates" hidden>
+          <h3>비슷한 날짜·금액의 내 카드 내역</h3>
+          <p class="help" id="bank-candidate-summary"></p>
+          <div id="bank-candidate-list"></div>
+        </section>
+        <label id="bank-separate-label" class="bank-separate" hidden
+          ><input type="checkbox" id="bank-confirm-separate" />카드 후보와 별개로 사용한 지출임을
+          확인했습니다.</label
+        >
+        <p class="help" id="bank-review-effect"></p>
+        <p class="help" id="bank-review-error" role="alert"></p>
+        <div class="bank-review-buttons">
+          <button class="button" type="button" id="bank-review-reload">
+            최신 후보 다시 불러오기
+          </button>
+          <button class="button primary" type="submit" id="bank-review-save">확인 저장</button>
+        </div>
+      </form>
+    </dialog>
+    <!-- 거래 상세 대화상자: 실제 가맹점·메모·분야와 적용 범위를 수정합니다. -->
+    <dialog id="transaction-editor" class="transaction-editor">
+      <form id="transaction-detail-form">
+        <div class="section-title">
+          <h2>거래 상세 · 분류</h2>
+          <button class="button" type="button" id="transaction-edit-close">닫기</button>
+        </div>
+        <p class="help" id="transaction-original"></p>
+        <label
+          >실제 가맹점 (선택)<input
+            id="transaction-actual"
+            maxlength="500"
+            placeholder="예: 동네 식당" /></label
+        ><label
+          >메모 (선택)<textarea
+            id="transaction-memo"
+            maxlength="500"
+            rows="3"
+            placeholder="예: 점심 식사"
+          ></textarea></label
+        ><label
+          >적용 범위<select id="transaction-scope">
+            <option value="transaction">이번 거래만</option>
+            <option value="merchant">동일 가맹점 공통</option>
+          </select></label
+        ><label>소비 분야<select id="transaction-category"></select></label>
+        <p class="help" id="transaction-scope-help"></p>
+        <label class="transaction-flag" id="transaction-not-spending-label"
+          ><input type="checkbox" id="transaction-not-spending" /> 소비에서 제외
+          <small id="transaction-not-spending-help"
+            >카드 대금·회사 경비·상품권 충전처럼 실제 소비가 아닌 거래는 모든 합계·예산에서 뺍니다.
+            사용 내역의 ‘제외 내역’ 보기에서 다시 복원할 수 있어요.</small
+          ></label
+        >
+        <label class="transaction-flag"
+          ><input type="checkbox" id="transaction-shared-hidden" /> 함께 보기에서 상대에게 숨기기
+          <small>이 거래만 상대의 ‘함께 보기’에 보이지 않습니다. 합계에는 그대로 들어가요.</small></label
+        >
+        <div class="receipt-box" id="transaction-receipts">
+          <div class="receipt-head">
+            <span>영수증 사진 (선택)</span
+            ><button class="button receipt-add" type="button" data-receipt-add>＋ 사진 올리기</button>
+            <input type="file" accept="image/*" multiple hidden data-receipt-input />
+          </div>
+          <div class="receipt-list" data-receipt-list></div>
+          <p class="help" data-receipt-state role="status"></p>
+        </div>
+        <p class="help" id="transaction-edit-error" role="alert"></p>
+        <button class="button primary" id="transaction-edit-save">저장</button>
+      </form>
+    </dialog>
+    <!-- 직접 입력 지출(manual-entry.js): 현금·계좌이체 등 명세서가 없는 지출을 추가·수정·삭제합니다. -->
+    <dialog id="manual-entry" class="transaction-editor manual-entry">
+      <form id="manual-entry-form">
+        <div class="section-title">
+          <h2 id="manual-entry-title">지출 직접 입력</h2>
+          <button class="button" type="button" id="manual-entry-close">닫기</button>
+        </div>
+        <div class="manual-entry-grid">
+          <label>날짜<input id="manual-date" type="date" required /></label
+          ><label
+            >금액(원)<input
+              id="manual-amount"
+              inputmode="numeric"
+              autocomplete="off"
+              placeholder="예: 12,000"
+              required
+          /></label>
+        </div>
+        <label
+          >사용처<input
+            id="manual-merchant"
+            maxlength="100"
+            autocomplete="off"
+            placeholder="예: 시장 반찬가게, 경조사비"
+            required
+        /></label>
+        <div class="manual-entry-grid">
+          <label
+            >결제 수단<select id="manual-method">
+              <option value="cash">현금</option>
+              <option value="transfer">계좌이체</option>
+              <option value="local">지역화폐</option>
+              <option value="onnuri">온누리상품권</option>
+              <option value="other">기타 결제</option>
+            </select></label
+          ><label>소비 분야<select id="manual-category" required></select></label>
+        </div>
+        <label class="manual-receipt"
+          ><input id="manual-receipt" type="checkbox" /> 현금영수증 받음
+          <small>연말정산 공제(30%)에 포함됩니다.</small></label
+        >
+        <label
+          >메모 (선택)<textarea id="manual-memo" maxlength="500" rows="2"></textarea
+        ></label>
+        <div class="receipt-box" id="manual-receipts">
+          <div class="receipt-head">
+            <span>영수증 사진 (선택)</span
+            ><button class="button receipt-add" type="button" data-receipt-add>＋ 사진 올리기</button>
+            <input type="file" accept="image/*" multiple hidden data-receipt-input />
+          </div>
+          <div class="receipt-list" data-receipt-list></div>
+          <p class="help" data-receipt-state role="status"></p>
+        </div>
+        <p class="help" id="manual-entry-error" role="alert"></p>
+        <div class="manual-entry-actions">
+          <button class="button" type="button" id="manual-entry-delete" hidden>삭제</button
+          ><button class="button primary" id="manual-entry-save">저장</button>
+        </div>
+      </form>
+    </dialog>
+    <!-- 영수증 사진 크게 보기(receipts.js) -->
+    <dialog id="receipt-viewer" class="receipt-viewer">
+      <div class="section-title">
+        <h2>영수증 사진</h2>
+        <button class="button" type="button" id="receipt-viewer-close">닫기</button>
+      </div>
+      <div id="receipt-viewer-images" class="receipt-viewer-images"></div>
+    </dialog>
+    <div id="status" role="status" aria-live="polite" class="hidden"></div>
+  </body>
+</html>

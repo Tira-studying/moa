@@ -1,0 +1,69 @@
+<!doctype html>
+<!-- 로그인 폼의 id는 static/login.js와 연결됩니다. 실제 인증과 세션 발급은 auth.py가 담당합니다. -->
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#18786b" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="모아" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="manifest" href="/static/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/moa-192.png" />
+    <title>로그인 · 모아</title>
+    <link rel="stylesheet" href="/static/style.css" />
+    <link rel="stylesheet" href="/static/pwa.css" />
+    <script src="/static/login.js" defer></script>
+    <script src="/static/pwa.js" defer></script>
+  </head>
+  <body class="login-page">
+    <section class="login-panel">
+      <a class="brand" href="/login">모아<span>moa</span></a>
+      <div class="eyebrow">YOUR PRIVATE CARD SPACE</div>
+      <h1>함께 보는 카드 생활</h1>
+      <p>내역을 확인하려면 로그인해 주세요.</p>
+      <div class="pwa-network-status" id="pwa-network-status" role="status" hidden>
+        연결을 확인해 주세요. 인터넷과 Tailscale, 서버 실행 상태를 확인한 뒤 다시 시도하세요.
+        <button class="button" id="pwa-reconnect" type="button">다시 확인</button>
+      </div>
+      <form id="login-form">
+        <label for="login-username">아이디</label
+        ><input
+          id="login-username"
+          name="username"
+          autocomplete="username"
+          value="owner"
+          pattern="[a-z0-9][a-z0-9_-]{2,39}"
+          maxlength="40"
+          required
+        /><label for="login-password">로그인 비밀번호</label
+        ><input
+          id="login-password"
+          name="password"
+          type="password"
+          autocomplete="current-password"
+          maxlength="128"
+          required
+        /><label class="login-remember" for="login-remember"
+          ><input id="login-remember" type="checkbox" checked /> 이 기기에서 로그인 유지</label
+        ><button class="button primary" id="login-button">로그인</button>
+      </form>
+      <p id="login-status" role="status" aria-live="polite"></p>
+      <p class="help">
+        기존 소유자 아이디는 owner입니다.<br />카드 명세서 비밀번호와 별개입니다.<br />로그인 유지를 켜면 90일
+        동안(쓸 때마다 다시 90일) 로그인이 유지되고, 끄면 8시간 뒤 로그아웃됩니다. 함께 쓰는 기기에서는
+        꺼 주세요.
+      </p>
+      <!-- 홈 화면 설치 안내: 브라우저가 지원하는 설치 경로를 pwa.js에서 표시합니다. -->
+      <details class="guidance" id="pwa-install-guide">
+        <summary>휴대폰 홈 화면에 설치</summary>
+        <p class="help" id="pwa-install-status"></p>
+        <button class="button" id="pwa-install" type="button" hidden>모아 설치</button>
+        <p class="help">
+          설치 후에도 인터넷과 Tailscale 연결이 필요합니다. 기존 모아 계정으로 로그인합니다.
+        </p>
+      </details>
+    </section>
+  </body>
+</html>
