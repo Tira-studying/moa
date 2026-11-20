@@ -527,7 +527,9 @@ class CodefSyncTests(unittest.TestCase):
             (
                 approval(resCancelYN="1"),
                 approval(resCancelYN="2"),
-                approval(resAccountCurrency="USD"),
+                # 통화를 알 수 없는 해외 결제입니다. USD처럼 통화가 있는 정상 승인은
+                # 외화 금액과 함께 0원으로 저장합니다(test_codef_cancel_groups 참고).
+                approval(resAccountCurrency="", resHomeForeignType="2"),
                 approval(resUsedAmount="-1200"),
             )
         ):

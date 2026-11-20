@@ -190,6 +190,23 @@ def remember_login(db):
     add_column(db, "sessions", "remember", "INTEGER NOT NULL DEFAULT 0")
 
 
+def foreign_payments(db):
+    """10단계: 해외(외화) 카드 결제의 통화·외화 금액과 원화 확정 여부(foreign_payments.py).
+
+    수집할 때 원화를 몰라 거래 금액을 0원으로 두고, 사용자가 환율·원화 결제액을 넣으면
+    confirmed=1로 바꿉니다. rate는 환율로 계산했을 때만 남습니다(원화 직접 입력이면 빈 값).
+    """
+    db.executescript("""
+        CREATE TABLE IF NOT EXISTS foreign_amounts (
+            transaction_id INTEGER PRIMARY KEY REFERENCES transactions(id) ON DELETE CASCADE,
+            currency TEXT NOT NULL,
+            amount TEXT NOT NULL,
+            rate TEXT NOT NULL DEFAULT '',
+            confirmed INTEGER NOT NULL DEFAULT 0
+        );
+    """)
+
+
 # 순서가 곧 버전 번호입니다. 1번째 = user_version 1. 맨 끝에만 추가합니다.
 MIGRATIONS = [
     ("버전 관리 도입 전의 기존 구조", baseline),
@@ -201,6 +218,7 @@ MIGRATIONS = [
     ("카드 승인 시각", payment_times),
     ("거래 영수증 사진", receipt_photos),
     ("로그인 유지", remember_login),
+    ("해외 결제 원화 확정", foreign_payments),
 ]
 LATEST_VERSION = len(MIGRATIONS)
 

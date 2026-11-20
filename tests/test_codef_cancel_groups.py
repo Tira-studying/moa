@@ -162,35 +162,79 @@ class CodefCancelGroupTests(unittest.TestCase):
             with self.assertRaises(sync.DataReviewError):
                 self.normalized(ordered)
 
-    def test_foreign_decimal_amount_goes_to_review_without_blocking_other_rows(self):
-        """해외 결제의 외화 소수 금액(예: USD 12.34) 한 건 때문에 나머지 원화 거래 저장이 멈추면 안 됩니다."""
-        foreign = dict(
-            resApprovalNo="fixture-foreign",
-            resUsedAmount="12.34",
-            resAccountCurrency="USD",
-            resHomeForeignType="2",
+    FOREIGN = dict(
+        resApprovalNo="fixture-foreign",
+        resUsedAmount="12.34",
+        resAccountCurrency="USD",
+        resHomeForeignType="2",
+    )
+
+    def foreign_rows(self):
+        return self.fetch(
+            "SELECT t.id,t.amount,f.currency,f.amount AS foreign_amount,f.rate,f.confirmed "
+            "FROM transactions t JOIN foreign_amounts f ON f.transaction_id=t.id"
         )
-        for kind in ("0", "1", "2"):
-            with self.subTest(kind=kind):
-                item = self.normalized(
-                    [fixture_row(resCancelYN=kind, resCancelAmount="1.50", **foreign)]
-                )[0]
+
+    def test_foreign_approval_is_saved_as_zero_won_with_foreign_amount(self):
+        """해외 결제(USD 12.34)는 조회를 멈추지 않고 원화 0원 + 외화 금액으로 저장합니다."""
+        self.persist([fixture_row(), fixture_row(**self.FOREIGN)])
+        amounts = sorted(row[0] for row in self.fetch("SELECT amount FROM transactions"))
+        self.assertEqual(amounts, [0, 2400])
+        [row] = self.foreign_rows()
+        self.assertEqual(
+            (row["amount"], row["currency"], row["foreign_amount"], row["confirmed"]),
+            (0, "USD", "12.34", 0),
+        )
+        self.assertEqual(self.fetch("SELECT * FROM codef_events WHERE state='review'"), [])
+
+    def test_foreign_cancel_or_unknown_currency_stays_in_review(self):
+        """외화 취소·부분취소, 통화를 알 수 없는 해외 결제는 원장에 넣지 않습니다."""
+        for changes in (
+            dict(resCancelYN="1", resCancelAmount="12.34"),
+            dict(resCancelYN="2", resCancelAmount="1.50"),
+            dict(resAccountCurrency=""),
+        ):
+            with self.subTest(changes=changes):
+                item = self.normalized([fixture_row(**{**self.FOREIGN, **changes})])[0]
                 self.assertIsNone(item["net"])
-                self.assertEqual(item["reason"], "외화·통화 확인 필요")
-                self.assertEqual(item["original_amount"], 0)
-        self.persist([fixture_row(), fixture_row(**foreign)])
-        self.assertEqual(self.amount(), 2400)
-        review = self.fetch("SELECT reason,net FROM codef_events WHERE state='review'")
-        self.assertEqual([tuple(row) for row in review], [("외화·통화 확인 필요", None)])
+                self.assertEqual(item["reason"], sync.FOREIGN_REASON)
+                self.assertNotIn("foreign_currency", item)
         with self.assertRaises(sync.DataReviewError):
-            self.normalized(
-                [
-                    fixture_row(
-                        resUsedAmount="12.34달러",
-                        **{k: v for k, v in foreign.items() if k != "resUsedAmount"},
-                    )
-                ]
-            )
+            self.normalized([fixture_row(**{**self.FOREIGN, "resUsedAmount": "12.34달러"})])
+
+    def test_requery_keeps_confirmed_won_and_converts_old_review(self):
+        """v18 검토 항목은 다시 조회할 때 저장하고, 사용자가 정한 원화는 재조회로 바뀌지 않습니다."""
+        import foreign_payments
+
+        db = connect()
+        try:
+            with db:
+                db.execute(
+                    "INSERT INTO codef_events(owner_id,card,fingerprint,used_on,merchant,original_amount,net,kind,state,reason) "
+                    "VALUES(1,'samsung',?,?,?,0,NULL,'0','review',?)",
+                    (
+                        self.normalized([fixture_row(**self.FOREIGN)])[0]["fingerprint"],
+                        datetime.now(sync.KST).strftime("%Y-%m-%d"),
+                        "가상 식당",
+                        sync.FOREIGN_REASON,
+                    ),
+                )
+        finally:
+            db.close()
+        self.persist([fixture_row(**self.FOREIGN)])
+        [row] = self.foreign_rows()
+        self.assertEqual(self.fetch("SELECT state FROM codef_events")[0][0], "saved")
+        db = connect()
+        try:
+            with db:
+                foreign_payments.confirm(db, 1, row["id"], {"rate": "1385.5"})
+        finally:
+            db.close()
+        self.persist([fixture_row(**self.FOREIGN)])
+        [row] = self.foreign_rows()
+        # 12.34 × 1385.5 = 17097.07 → 원 단위 반올림
+        self.assertEqual((row["amount"], row["rate"], row["confirmed"]), (17097, "1385.5", 1))
+        self.assertEqual(len(self.fetch("SELECT * FROM transactions")), 1)
 
     def test_malformed_row_still_prevents_unrelated_rows_from_being_saved(self):
         with self.assertRaises(sync.DataReviewError):

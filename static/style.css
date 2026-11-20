@@ -1433,6 +1433,13 @@ main > header {
 .duplicate-source .button {
   flex-shrink: 0;
 }
+/* 해외 결제의 외화 금액(원화 확정 뒤 원화 아래에 작게 표시) */
+.foreign-label {
+  display: block;
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: 400;
+}
 .excluded-label {
   display: block;
   color: #94643e;

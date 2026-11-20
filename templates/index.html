@@ -1738,6 +1738,26 @@
           <button class="button" type="button" id="transaction-edit-close">닫기</button>
         </div>
         <p class="help" id="transaction-original"></p>
+        <!-- 해외 결제(foreign_payments.py): 적용 환율이나 원화 결제액 중 하나를 넣으면 원화 금액을 정합니다. -->
+        <div class="receipt-box" id="transaction-foreign" hidden>
+          <div class="receipt-head"><span id="transaction-foreign-title">해외 결제</span></div>
+          <p class="help" id="transaction-foreign-help"></p>
+          <label
+            >적용 환율<input
+              id="transaction-foreign-rate"
+              inputmode="decimal"
+              autocomplete="off"
+              placeholder="예: 1385.2" /></label
+          ><label
+            >또는 원화 결제액(원)<input
+              id="transaction-foreign-krw"
+              inputmode="numeric"
+              autocomplete="off"
+              placeholder="예: 17,090"
+          /></label>
+          <button class="button" type="button" id="transaction-foreign-save">원화 금액 적용</button>
+          <p class="help" id="transaction-foreign-state" role="status"></p>
+        </div>
         <label
           >실제 가맹점 (선택)<input
             id="transaction-actual"

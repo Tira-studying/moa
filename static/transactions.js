@@ -131,7 +131,13 @@ function renderTransactions() {
             >
           </td>
           <td class="transaction-amount right ${t.amount < 0 ? 'refund' : ''}" role="cell">
-            ${won(t.amount)}원${
+            ${foreignPending(t) ? escapeHTML(foreignLabel(t)) : `${won(t.amount)}원`}${
+              t.foreign_currency
+                ? foreignPending(t)
+                  ? '<span class="category-review-tag">원화 입력 필요</span>'
+                  : `<small class="foreign-label">${escapeHTML(foreignLabel(t))}</small>`
+                : ''
+            }${
               t.excluded
                 ? `<small class="excluded-label">${t.excluded_reason === 'not_spending' ? '소비 제외' : '집계 제외'}</small><button class="button" type="button" data-ledger-restore="${t.id}">복원</button>`
                 : ''
@@ -280,6 +286,50 @@ function transactionFlagChanges() {
     changes.shared_hidden = $('transaction-shared-hidden').checked;
   return changes;
 }
+/** 해외 결제 표시(예: 'USD 12.34')와 원화 미확정 여부입니다. 외화 정보는 foreign_payments.py가 남깁니다. */
+function foreignLabel(item) {
+  return `${item.foreign_currency} ${item.foreign_amount}`;
+}
+function foreignPending(item) {
+  return Boolean(item.foreign_currency) && !item.foreign_confirmed;
+}
+/** 해외 결제면 상세 창에 환율·원화 결제액 입력을 보여 줍니다. 두 칸 중 하나만 넣습니다. */
+function openForeignEditor(item) {
+  $('transaction-foreign').hidden = !item.foreign_currency;
+  if (!item.foreign_currency) return;
+  $('transaction-foreign-title').textContent = `해외 결제 · ${foreignLabel(item)}`;
+  $('transaction-foreign-help').textContent = foreignPending(item)
+    ? '카드사가 원화 금액을 아직 주지 않아 0원으로 저장돼 합계에 빠져 있어요. 청구서의 적용 환율이나 원화 결제액을 넣어 주세요.'
+    : `지금 ${won(item.amount)}원으로 반영돼 있어요${item.foreign_rate ? ` (환율 ${item.foreign_rate})` : ''}. 고치려면 다시 입력하세요.`;
+  $('transaction-foreign-rate').value = '';
+  $('transaction-foreign-krw').value = '';
+  $('transaction-foreign-state').textContent = '';
+}
+$('transaction-foreign-save').onclick = async () => {
+  if (transactionEditId === null) return;
+  const rate = $('transaction-foreign-rate').value.trim();
+  const krw = $('transaction-foreign-krw').value.trim();
+  if (Boolean(rate) === Boolean(krw)) {
+    $('transaction-foreign-state').textContent = '적용 환율과 원화 결제액 중 하나만 입력해 주세요.';
+    return;
+  }
+  $('transaction-foreign-save').disabled = true;
+  try {
+    const result = await api(`/api/transactions/${transactionEditId}/foreign-amount`, {
+      method: 'PUT',
+      revision: transactionEditRevision,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(rate ? { rate } : { krw }),
+    });
+    $('transaction-editor').close();
+    await refresh();
+    notify(`해외 결제를 ${won(result.amount)}원으로 반영했습니다.`);
+  } catch (error) {
+    $('transaction-foreign-state').textContent = error.message;
+  } finally {
+    $('transaction-foreign-save').disabled = false;
+  }
+};
 /** 거래 상세를 채우고 편집 시작 당시 버전을 보관합니다. 나중 조회로 이 버전을 덮어쓰지 않습니다. */
 function openTransactionEditor(item) {
   transactionEditRevision = state._revision;
@@ -287,7 +337,8 @@ function openTransactionEditor(item) {
   transactionCategoryDirty = false;
   transactionPaymentService = item.payment_service || null;
   $('transaction-original').textContent =
-    `${item.used_on} · ${item.card} · ${won(item.amount)}원 · 원본 가맹점: ${item.merchant}`;
+    `${item.used_on} · ${item.card} · ${foreignPending(item) ? `${foreignLabel(item)} (원화 입력 필요)` : `${won(item.amount)}원`} · 원본 가맹점: ${item.merchant}`;
+  openForeignEditor(item);
   $('transaction-actual').value = item.actual_merchant || '';
   $('transaction-memo').value = item.memo || '';
   $('transaction-scope').value =

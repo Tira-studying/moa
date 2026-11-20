@@ -25,6 +25,7 @@ from codef_card import CARD_OPTIONS, CardCheckError, post_codef, query_approvals
 from codef_connection import configuration, config_digest, issue_token
 import codef_card_auth as card_auth
 import bank_expenses
+import foreign_payments
 from card_performance import last_four_of
 
 KST = ZoneInfo("Asia/Seoul")
@@ -33,6 +34,7 @@ NORMALIZATION_VERSION = 3
 AMOUNT_CONFLICT_REASON = "동일 승인 식별자의 이용금액 차이 확인 필요"
 STATUS_CONFLICT_REASON = "동일 승인 식별자의 승인·거절 상태 확인 필요"
 CANCEL_CONFLICT_REASON = "동일 승인·취소 묶음 확인 필요"
+FOREIGN_REASON = "외화·통화 확인 필요"
 
 
 class SyncError(Exception):
@@ -336,19 +338,29 @@ def normalize(data, card, start, end):
         domestic = currency == "KRW" or (
             currency in (None, "") and row.get("resHomeForeignType") == "1"
         )
+        foreign = None
         if not domestic:
-            # 해외 결제는 이용금액이 외화(예: USD 12.34)라 원화 정수 검사를 통과하지 못합니다.
-            # 이 한 건 때문에 조회 전체를 멈추지 않도록, 원장에는 넣지 않고 검토 목록에만 남깁니다.
-            # 원화 금액은 알 수 없으므로 0으로 둡니다(충돌 묶음의 '알 수 없음'과 같은 뜻).
-            # 원화 환산액은 청구 확정 때 바뀔 수 있어, 쓰면 다음 조회에서 금액 충돌로 오인됩니다.
+            # 해외 결제는 이용금액이 외화(예: USD 12.34)이고 원화 금액(resKRWAmt)은 비어 옵니다.
+            # 정상 승인은 원화 0원으로 저장하고 통화·외화 금액을 남겨, 사용자가 환율이나
+            # 원화 결제액을 넣으면 그 원화로 바꿉니다(foreign_payments.py).
+            # 외화 취소·부분취소는 원승인과 맞춰 볼 원화가 없어 계속 검토 목록에 남깁니다.
             foreign_amount(row.get("resUsedAmount"))
-            amount, net, reason = 0, None, "외화·통화 확인 필요"
+            amount, net, reason = 0, 0, FOREIGN_REASON
+            value = foreign_payments.clean_foreign_amount(row.get("resUsedAmount"))
+            if (
+                kind == "0"
+                and isinstance(currency, str)
+                and foreign_payments.CURRENCY_PATTERN.fullmatch(currency)
+                and value
+            ):
+                foreign, reason = (currency, value), ""
+            elif kind == "3":
+                reason = ""
         else:
             amount = money(row.get("resUsedAmount"))
             reason = "" if amount > 0 else "이용금액 부호 확인 필요"
             net = amount
         if not domestic:
-            # 취소·부분취소 금액도 외화라 계산하지 않습니다. 검토 사유는 외화 확인으로 둡니다.
             pass
         elif kind == "1":
             net = 0
@@ -387,6 +399,8 @@ def normalize(data, card, start, end):
             last_four=last_four_of(card_identity),
             used_time=when.strftime("%H:%M"),
         )
+        if foreign:
+            item["foreign_currency"], item["foreign_amount"] = foreign
         if not item["last_four"]:
             # 끝자리를 못 읽은 카드사의 가림 형식만 작업자 로그로 남깁니다(숫자는 9로 바꿔 실제 번호 없음).
             missing_shapes.add(re.sub(r"[0-9]", "9", card_identity)[:32])
@@ -471,7 +485,7 @@ def insert_transaction(db, owner, card, item):
     source = db.execute(
         "SELECT id FROM imports WHERE owner_id=? AND card=? AND digest=?", (owner, label, digest)
     ).fetchone()[0]
-    return db.execute(
+    transaction = db.execute(
         "INSERT INTO transactions(import_id,used_on,merchant,amount,card_last_four,used_time) "
         "VALUES(?,?,?,?,?,?)",
         (
@@ -483,6 +497,9 @@ def insert_transaction(db, owner, card, item):
             item.get("used_time") or "",
         ),
     ).lastrowid
+    if item.get("foreign_currency"):
+        foreign_payments.record(db, transaction, item["foreign_currency"], item["foreign_amount"])
+    return transaction
 
 
 def store_events(db, owner, card, items):
@@ -496,6 +513,15 @@ def store_events(db, owner, card, items):
             "SELECT * FROM codef_events WHERE owner_id=? AND card=? AND fingerprint=?",
             (owner, card, item["fingerprint"]),
         ).fetchone()
+        if (
+            old
+            and item.get("foreign_currency")
+            and old["state"] == "review"
+            and old["reason"] == FOREIGN_REASON
+            and old["transaction_id"] is None
+        ):
+            # v18에서 검토 목록에만 남긴 외화 승인은 이제 외화 금액과 함께 저장합니다.
+            old = None
         automatic_decline = bool(
             old
             and old["state"] == "ignored"
@@ -564,6 +590,9 @@ def store_events(db, owner, card, items):
             state, reason = (
                 ("review", "기존 승인과 거절 상태 확인 필요") if transaction else ("ignored", "")
             )
+        elif old and transaction and item.get("foreign_currency"):
+            # 외화 거래의 원장 금액은 사용자가 정한 원화입니다. 다시 조회해도 바꾸지 않습니다.
+            state, reason = "saved", ""
         elif (
             old
             and transaction
@@ -592,10 +621,20 @@ def store_events(db, owner, card, items):
             state, reason = "review", old["reason"] or "기존 출처와 변경 내역 확인 필요"
         elif item["kind"] == "1":
             state, reason = "review", "원승인 확인이 필요한 취소"
-        elif db.execute(
-            "SELECT 1 FROM transactions t JOIN imports i ON i.id=t.import_id WHERE i.owner_id=? AND i.card=? AND i.digest NOT LIKE 'codef:%' AND t.used_on=? AND t.merchant=? AND t.amount IN (?,?) LIMIT 1",
-            (owner, label, item["used_on"], item["merchant"], item["original_amount"], item["net"]),
-        ).fetchone():
+        elif (
+            not item.get("foreign_currency")
+            and db.execute(
+                "SELECT 1 FROM transactions t JOIN imports i ON i.id=t.import_id WHERE i.owner_id=? AND i.card=? AND i.digest NOT LIKE 'codef:%' AND t.used_on=? AND t.merchant=? AND t.amount IN (?,?) LIMIT 1",
+                (
+                    owner,
+                    label,
+                    item["used_on"],
+                    item["merchant"],
+                    item["original_amount"],
+                    item["net"],
+                ),
+            ).fetchone()
+        ):
             state, reason = "review", "명세서와 중복 후보"
         else:
             transaction = insert_transaction(db, owner, card, item)

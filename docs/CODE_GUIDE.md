@@ -84,6 +84,7 @@ HTML의 `data-view="planning"` 같은 `data-` 속성은 화면 이동에 필요�
 | `static/household.js` | 서버가 집계한 통합 지출만 표시 |
 | `static/shared-management.js`, `shared_management.py` | 허용된 관리 필드만 구성원별 읽기 공유 |
 | `static/shared-activity.js`, `shared_spending.py` | 사용 내역 ‘함께 보기’: `share_transactions`(기본 켜짐)인 구성원의 한 달 내역·메모를 읽기 전용으로(`/api/shared-transactions`, `shared_hidden` 거래·제외 거래는 뺌) |
+| `foreign_payments.py` (화면: `static/transactions.js`의 `openForeignEditor`) | 해외(외화) 카드 결제의 원화 확정: CODEF가 원화 금액을 주지 않는 해외 정상 승인을 원화 0원 + 외화 통화·금액(`foreign_amounts`)으로 저장하고, 거래 상세에서 적용 환율 또는 원화 결제액을 받아 `PUT /api/transactions/<id>/foreign-amount`로 거래 금액을 정합니다. 주인만 수정하며, 재조회는 정한 원화를 덮어쓰지 않습니다 |
 | `static/receipts.js`, `receipts.py` | 거래 영수증 사진: 거래 상세·직접 입력 창에서 사진을 붙이고·크게 보고·지웁니다. 화면이 긴 변 1600px JPEG로 줄여(EXIF 제거) 올리고, 서버는 JPEG·PNG·WebP 서명만 받아 DB(`transaction_receipts`)에 저장합니다. 주인만 올리고 지우며, 상대는 함께 보기에 보이는 거래의 사진만 `/api/shared-receipts/<id>`로 봅니다 |
 | `manage.py`, `demo_data.py` | 소유자 비밀번호 설정(`manage.py`)과 가상 데이터 채우기(`manage.py demo`). 데모는 가상 CSV 명세서 3개를 앱의 `/api/preview`→`/api/import` 흐름으로 저장하며, 거래·명세서가 있는 DB에는 넣지 않고 멈춥니다 |
 | `static/pwa.js`, `static/sw.js` | 홈 화면 설치·복귀 시 세션 확인·연결 실패 안내 |
@@ -359,6 +360,7 @@ Gmail은 읽기 전용으로 열고, `BODY.PEEK`으로 읽음 표시 없이 원�
 | 대시보드 계산·그래프 | `static/analytics.js`, `static/app.js` | `test_analytics.py`, `patterns-ui.cjs` |
 | 사용 내역 달력 | `static/calendar.js`, `static/analytics.js` | `analytics.cjs`, `test_calendar.py`, `calendar-ui.cjs` |
 | 직접 입력 지출 | `manual_entries.py`, `static/manual-entry.js` | `test_manual_entries.py`, `manual-entry-ui.cjs` |
+| 해외 결제 원화 확정 | `foreign_payments.py`, `static/transactions.js` | `test_foreign_payments.py`, `test_codef_cancel_groups.py` |
 | 엑셀 내보내기 | `export_xlsx.py`, `static/export.js` | `test_export.py`, `export-ui.cjs` |
 | 파일 날짜·금액 해석 | `app.py`의 `parse_*`, `read_rows` | `test_app.py` |
 | 카드사 HTML 양식·더보기 | `scripts/`와 `secure_html.py` | `test_secure_html.py`, `test_samsung_network.py`, `test_woori_rows.py` |
@@ -474,7 +476,7 @@ CLI의 `read_hidden → utf8_terminal_input → getpass`는 한글 이름·비�
 
 `collect`는 계정 활성·연결 버전을 확인해 작업만 예약한 뒤 DB 연결을 닫고 외부 조회를 합니다. 최근 30일 결과를 `normalize`로 검증한 뒤 새 DB 트랜잭션에서 계정·연결 버전을 다시 검사합니다. 외부 호출 도중 사용자 접근이 해제되거나 연결이 바뀌면 결과를 버립니다. 연결 ID 복호화에 사용한 저장 키와 연결의 앱 설정 해시도 조회 후·최종 쓰기 잠금 안에서 재검사합니다. 처리 중 키가 바뀌면 다른 HMAC으로 거래를 중복 저장하거나 성공으로 표시하지 않고, 기존 원장·마지막 성공 시각을 유지하며 오류 상태로 중단합니다. 날짜·금액·필수 식별자가 잘못된 목록은 일부만 저장하지 않습니다. 식별자는 비밀 키를 이용한 HMAC만 남기고 원문·전체 카드번호·승인번호는 보관하지 않습니다.
 
-`store_events`는 출처 상태와 원장 변경을 같은 저장 단위로 처리합니다. 신뢰할 수 있는 승인만 월별 CODEF import에 넣고 개인 버전·일반 이력을 갱신합니다. 같은 출처 재조회는 원장을 늘리지 않습니다. 원승인이 일치한 전체취소·정확한 부분취소는 기존 금액을 갱신해 분류·주석을 유지합니다. 명세서 중복 후보·불확실한 취소·외화는 확인 필요로 분리하며 직접 삭제한 원장을 몰래 다시 만들지 않습니다. 최초 자동 수집 후 나중에 등록한 명세서의 중복은 기존 중복 검토로 확인합니다.
+`store_events`는 출처 상태와 원장 변경을 같은 저장 단위로 처리합니다. 신뢰할 수 있는 승인만 월별 CODEF import에 넣고 개인 버전·일반 이력을 갱신합니다. 같은 출처 재조회는 원장을 늘리지 않습니다. 원승인이 일치한 전체취소·정확한 부분취소는 기존 금액을 갱신해 분류·주석을 유지합니다. 명세서 중복 후보·불확실한 취소·외화 취소와 통화를 알 수 없는 해외 결제는 확인 필요로 분리하며(통화가 있는 해외 정상 승인은 원화 0원 + 외화 금액으로 저장해 사용자가 원화를 정함, `foreign_payments.py`) 직접 삭제한 원장을 몰래 다시 만들지 않습니다. 최초 자동 수집 후 나중에 등록한 명세서의 중복은 기존 중복 검토로 확인합니다.
 
 `/api/codef-sync`는 본인 상태·검토 행만 허용 목록으로 반환하고 연결 ID·암호문·앱 키를 보내지 않습니다. 새로고침 요청·중지·검토 API는 기존 세션 재검사·개인 버전·감사 이력 저장을 사용합니다. 상대방 거래나 개인 연결을 읽거나 변경하지 못합니다. `static/codef-sync.js`는 계정 화면에서 상태와 검토 버튼만 표시하고 `revisionResource`가 CODEF 조회 버전을 편집 요청에 연결합니다. 브라우저 저장소·PWA 캐시·오프라인 대기열은 사용하지 않습니다.
 

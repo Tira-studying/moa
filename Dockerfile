@@ -20,7 +20,7 @@ RUN --mount=type=secret,id=build_ca \
     pip install --no-cache-dir -r requirements.txt \
  && npm ci --ignore-scripts --cache /tmp/npm-cache && rm -rf /tmp/npm-cache
 # 4. 실행에 필요한 코드·화면·검증 파일을 복사합니다. 비밀 파일과 실제 DB는 복사하지 않습니다.
-COPY migrations.py preview_store.py card_performance.py features.py tax_deduction.py budgets.py subscriptions.py manual_entries.py receipts.py export_xlsx.py connection_setup.py bank_expenses.py codef_bank.py codef_card_auth.py codef_direct.py codef_sync.py codef_worker.py codef_card.py codef_connection.py sms_inbox.py gmail_inbox.py mail_worker.py app.py shared_management.py shared_spending.py personal_data.py collaboration_access.py categories.py finance.py auth.py secure_html.py secure_pdf.py diagnostic_structure.py manage.py demo_data.py ./
+COPY migrations.py preview_store.py card_performance.py features.py tax_deduction.py budgets.py subscriptions.py manual_entries.py foreign_payments.py receipts.py export_xlsx.py connection_setup.py bank_expenses.py codef_bank.py codef_card_auth.py codef_direct.py codef_sync.py codef_worker.py codef_card.py codef_connection.py sms_inbox.py gmail_inbox.py mail_worker.py app.py shared_management.py shared_spending.py personal_data.py collaboration_access.py categories.py finance.py auth.py secure_html.py secure_pdf.py diagnostic_structure.py manage.py demo_data.py ./
 COPY scripts ./scripts
 COPY static ./static
 COPY templates ./templates

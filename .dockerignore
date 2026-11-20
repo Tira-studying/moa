@@ -10,6 +10,7 @@
 !diagnostic_structure.py
 !manage.py
 !demo_data.py
+!foreign_payments.py
 !scripts/
 !scripts/**
 !static/

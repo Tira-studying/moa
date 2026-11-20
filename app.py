@@ -56,6 +56,7 @@ import features
 import tax_deduction
 import budgets
 import subscriptions
+import foreign_payments
 import manual_entries
 import receipts
 import shared_spending
@@ -893,10 +894,13 @@ TRANSACTIONS_SQL = f"""
            CASE WHEN sh.transaction_id IS NULL THEN 0 ELSE 1 END AS shared_hidden,
            m.method AS manual_method, COALESCE(m.cash_receipt, 0) AS cash_receipt,
            COALESCE((SELECT GROUP_CONCAT(r.id) FROM transaction_receipts r
-                     WHERE r.transaction_id = t.id), '') AS receipt_ids
+                     WHERE r.transaction_id = t.id), '') AS receipt_ids,
+           COALESCE(fx.currency, '') AS foreign_currency, COALESCE(fx.amount, '') AS foreign_amount,
+           COALESCE(fx.rate, '') AS foreign_rate, COALESCE(fx.confirmed, 1) AS foreign_confirmed
     FROM transactions t
     JOIN imports i ON i.id = t.import_id
     LEFT JOIN manual_entries m ON m.transaction_id = t.id
+    LEFT JOIN foreign_amounts fx ON fx.transaction_id = t.id
     LEFT JOIN shared_hidden sh ON sh.transaction_id = t.id
     LEFT JOIN transaction_exclusions e ON e.transaction_id = t.id
     LEFT JOIN transaction_annotations a ON a.transaction_id = t.id
@@ -1789,6 +1793,26 @@ def subscriptions_data():
 # ─────────────────────────────────────────────────────────────────
 def manual_entry_payload(db, user_id):
     return manual_entries.validate(request.get_json(silent=True), category_catalog(db, user_id))
+
+
+@app.put("/api/transactions/<int:transaction_id>/foreign-amount")
+def foreign_amount_confirm(transaction_id):
+    """해외 결제의 적용 환율 또는 원화 결제액을 받아 거래 금액을 원화로 정합니다(foreign_payments.py)."""
+    db = connect()
+    try:
+        with db:
+            db.execute("BEGIN IMMEDIATE")
+            amount = foreign_payments.confirm(
+                db, current_user_id(), transaction_id, request.get_json(silent=True)
+            )
+        g.audit_target = f"해외 결제 원화 확정 #{transaction_id}"
+        return jsonify(amount=amount)
+    except ValueError as exc:
+        return fail(str(exc))
+    except LookupError as exc:
+        return fail(str(exc), 404)
+    finally:
+        db.close()
 
 
 @app.post("/api/transactions/manual")
