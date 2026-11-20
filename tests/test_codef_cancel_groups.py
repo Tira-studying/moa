@@ -162,6 +162,36 @@ class CodefCancelGroupTests(unittest.TestCase):
             with self.assertRaises(sync.DataReviewError):
                 self.normalized(ordered)
 
+    def test_foreign_decimal_amount_goes_to_review_without_blocking_other_rows(self):
+        """해외 결제의 외화 소수 금액(예: USD 12.34) 한 건 때문에 나머지 원화 거래 저장이 멈추면 안 됩니다."""
+        foreign = dict(
+            resApprovalNo="fixture-foreign",
+            resUsedAmount="12.34",
+            resAccountCurrency="USD",
+            resHomeForeignType="2",
+        )
+        for kind in ("0", "1", "2"):
+            with self.subTest(kind=kind):
+                item = self.normalized(
+                    [fixture_row(resCancelYN=kind, resCancelAmount="1.50", **foreign)]
+                )[0]
+                self.assertIsNone(item["net"])
+                self.assertEqual(item["reason"], "외화·통화 확인 필요")
+                self.assertEqual(item["original_amount"], 0)
+        self.persist([fixture_row(), fixture_row(**foreign)])
+        self.assertEqual(self.amount(), 2400)
+        review = self.fetch("SELECT reason,net FROM codef_events WHERE state='review'")
+        self.assertEqual([tuple(row) for row in review], [("외화·통화 확인 필요", None)])
+        with self.assertRaises(sync.DataReviewError):
+            self.normalized(
+                [
+                    fixture_row(
+                        resUsedAmount="12.34달러",
+                        **{k: v for k, v in foreign.items() if k != "resUsedAmount"},
+                    )
+                ]
+            )
+
     def test_malformed_row_still_prevents_unrelated_rows_from_being_saved(self):
         with self.assertRaises(sync.DataReviewError):
             self.persist(

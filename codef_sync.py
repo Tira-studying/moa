@@ -278,6 +278,16 @@ def money(value):
     return result
 
 
+def foreign_amount(value):
+    """해외 결제의 외화 금액은 소수점을 허용하되, 숫자 형식이 아니면 저장하지 않고 멈춥니다."""
+    if (
+        not isinstance(value, str)
+        or len(value) > 64
+        or not re.fullmatch(r"-?(?:[0-9]+|[0-9]{1,3}(?:,[0-9]{3})+)(?:\.[0-9]+)?", value)
+    ):
+        raise DataReviewError("승인 금액 형식 확인이 필요합니다. 저장하지 않았습니다.")
+
+
 def normalize(data, card, start, end):
     """필수 식별자를 HMAC으로 변환하고 안전한 공통 필드만 남깁니다. 원문은 보관하지 않습니다."""
     rows = data if isinstance(data, list) else [data]
@@ -319,20 +329,28 @@ def normalize(data, card, start, end):
             raise DataReviewError(
                 "승인 식별자 누락으로 중복 여부를 확인할 수 없습니다. 저장하지 않았습니다."
             )
-        amount = money(row.get("resUsedAmount"))
         kind = row.get("resCancelYN")
         if kind not in ("0", "1", "2", "3"):
             raise DataReviewError("취소 상태 확인이 필요합니다. 저장하지 않았습니다.")
         currency = row.get("resAccountCurrency")
-        reason = ""
-        if not (
-            currency == "KRW" or (currency in (None, "") and row.get("resHomeForeignType") == "1")
-        ):
-            reason = "외화·통화 확인 필요"
-        if amount <= 0:
-            reason = "이용금액 부호 확인 필요"
-        net = amount
-        if kind == "1":
+        domestic = currency == "KRW" or (
+            currency in (None, "") and row.get("resHomeForeignType") == "1"
+        )
+        if not domestic:
+            # 해외 결제는 이용금액이 외화(예: USD 12.34)라 원화 정수 검사를 통과하지 못합니다.
+            # 이 한 건 때문에 조회 전체를 멈추지 않도록, 원장에는 넣지 않고 검토 목록에만 남깁니다.
+            # 원화 금액은 알 수 없으므로 0으로 둡니다(충돌 묶음의 '알 수 없음'과 같은 뜻).
+            # 원화 환산액은 청구 확정 때 바뀔 수 있어, 쓰면 다음 조회에서 금액 충돌로 오인됩니다.
+            foreign_amount(row.get("resUsedAmount"))
+            amount, net, reason = 0, None, "외화·통화 확인 필요"
+        else:
+            amount = money(row.get("resUsedAmount"))
+            reason = "" if amount > 0 else "이용금액 부호 확인 필요"
+            net = amount
+        if not domestic:
+            # 취소·부분취소 금액도 외화라 계산하지 않습니다. 검토 사유는 외화 확인으로 둡니다.
+            pass
+        elif kind == "1":
             net = 0
             if row.get("resCancelAmount") and money(row["resCancelAmount"]) != amount:
                 reason = "취소금액과 원승인 확인 필요"
