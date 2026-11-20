@@ -554,32 +554,34 @@ class BankTests(unittest.TestCase):
         self.assertEqual(self.link()["state"], "error")
         self.assertEqual(len(self.rows("SELECT * FROM bank_transactions")), 1)
 
-    def test_network_failure_pauses_worker_without_auth_retry(self):
-        """CF-12200은 통신 오류로 구분하고 작업자가 같은 연결을 계속 요청하지 않습니다."""
-        client = FakeClient({})
-        client.send.return_value = {
-            "result": {"code": "CF-12200", "message": "fixture-private-host"}
-        }
-        bank.collect(connect, client, self.link(), "network-error")
-        self.assertEqual(self.link()["state"], "error")
-        self.assertIn("통신 연결 실패", self.link()["message"])
-        self.assertNotIn("fixture-private-host", self.link()["message"])
-        bank.tick(connect, client)
-        self.assertEqual(client.send.call_count, 1)
+    def test_network_failure_retries_next_slot_once_then_pauses(self):
+        """CF-12200·CF-12701은 다음 회차에 한 번 다시 조회하고, 연속 두 번이면 멈춥니다."""
+        for code in ("CF-12200", "CF-12701"):
+            with self.subTest(code=code):
+                self.execute("DELETE FROM bank_jobs")
+                self.execute("UPDATE bank_links SET state='ready' WHERE id=?", (self.id,))
+                failure = {"result": {"code": code, "message": "fixture-private-host"}}
+                client = FakeClient({})
+                client.send.return_value = failure
+                bank.collect(connect, client, self.link(), code + "-first")
+                self.assertEqual(self.link()["state"], "ready")
+                self.assertIn("다음 회차에 한 번 다시", self.link()["message"])
+                self.assertNotIn("fixture-private", self.link()["message"])
+                bank.collect(connect, client, self.link(), code + "-second")
+                self.assertEqual(self.link()["state"], "error")
+                self.assertIn("두 번 연속", self.link()["message"])
+                self.assertEqual(len(self.rows("SELECT * FROM bank_transactions")), 1)
+                bank.tick(connect, client)
+                self.assertEqual(client.send.call_count, 2)
 
-    def test_page_change_is_technical_error_and_preserves_saved_bank_rows(self):
-        """CF-12701은 인증 재입력으로 안내하지 않고 한 번 조회 뒤 멈춥니다."""
-        client = FakeClient({})
-        client.send.return_value = {
-            "result": {"code": "CF-12701", "message": "fixture-private-page-detail"}
-        }
-        bank.collect(connect, client, self.link(), "page-change")
-        self.assertEqual(self.link()["state"], "error")
-        self.assertIn("전문·페이지 변경", self.link()["message"])
-        self.assertNotIn("fixture-private", self.link()["message"])
-        self.assertEqual(len(self.rows("SELECT * FROM bank_transactions")), 1)
-        bank.tick(connect, client)
-        self.assertEqual(client.send.call_count, 1)
+    def test_success_between_network_failures_resets_retry(self):
+        """성공한 회차가 끼면 다음 통신 실패도 다시 한 번은 재조회 대상입니다."""
+        failure = {"result": {"code": "CF-12200"}}
+        client = FakeClient(response())
+        client.send.side_effect = [failure, client.send.return_value, failure]
+        for slot in ("one", "two", "three"):
+            bank.collect(connect, client, self.link(), slot)
+        self.assertEqual(self.link()["state"], "ready")
 
     def test_cli_network_retry_requires_one_explicit_choice(self):
         """등록이 끝난 조회에서만 사용자가 선택한 1회 재요청을 허용합니다."""

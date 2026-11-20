@@ -383,6 +383,8 @@ def collect(connect, client, link, slot):
     except CardCheckError as error:
         state = "error" if error.code in (None, "CF-12200", "CF-12701") else "needs_auth"
         message = str(error)
+        if error.code in TRANSIENT_CODES:
+            state, message = transient_failure(connect, link, slot, error.code)
     except SyncError as error:
         state, message = "error", str(error)
     except Exception:
@@ -412,11 +414,46 @@ def collect(connect, client, link, slot):
                 "UPDATE bank_links SET state=?,message=?,last_attempt=?,last_success=CASE WHEN ? THEN ? ELSE last_success END WHERE id=?",
                 (state, message, now, items is not None, now, link["id"]),
             )
+            # 일시 오류로 다음 회차에 다시 조회하는 경우는 'transient'로 남겨 연속 여부를 판단합니다.
+            job_state = "transient" if state == "ready" and items is None else state
             db.execute(
-                "UPDATE bank_jobs SET state=? WHERE link_id=? AND slot=?", (state, link["id"], slot)
+                "UPDATE bank_jobs SET state=? WHERE link_id=? AND slot=?",
+                (job_state, link["id"], slot),
             )
     finally:
         db.close()
+
+
+# 통신 실패(CF-12200)·전문 변경(CF-12701)은 은행·CODEF 쪽 일시 문제인 경우가 많습니다.
+TRANSIENT_CODES = ("CF-12200", "CF-12701")
+
+
+def transient_failure(connect, link, slot, code):
+    """일시 오류는 다음 회차에 한 번만 다시 조회하고, 바로 앞 회차도 같은 실패였으면 멈춥니다.
+
+    예전에는 한 번만 실패해도 error로 멈춰, 2026-11-04 통신 오류 한 번 뒤 16일 동안 조회하지 않았습니다.
+    로그인 오류가 아니므로 비밀번호 오류 누적 위험은 없고, 연속 실패는 멈춰 요청을 반복하지 않습니다.
+    """
+    db = connect()
+    try:
+        previous = db.execute(
+            "SELECT state FROM bank_jobs WHERE link_id=? AND slot<>? AND state<>'covered' "
+            "ORDER BY created DESC, rowid DESC LIMIT 1",
+            (link["id"], slot),
+        ).fetchone()
+    finally:
+        db.close()
+    if previous and previous["state"] == "transient":
+        return (
+            "error",
+            "우리은행 조회가 두 번 연속 일시 오류로 실패해 자동 조회를 멈췄습니다. "
+            f"은행·CODEF 상태를 확인해 주세요. 자동 재시도하지 않습니다. [코드: {code}]",
+        )
+    return (
+        "ready",
+        "우리은행 연결이 일시적으로 실패해 이번 회차를 저장하지 못했습니다. "
+        f"로그인 오류가 아니며, 다음 회차에 한 번 다시 조회합니다. [코드: {code}]",
+    )
 
 
 def tick(connect, client, now=None):
